@@ -1238,15 +1238,16 @@
     const x0 = geo.roadX0 - 6, x1 = geo.roadX1 + 6, w = x1-x0, bh = 50, cxm = (x0+x1)/2;
     // how overdue is the block?  1.0 = on schedule; the sign heats up past that
     const late = LIVE ? Math.max(0, stat.lastBlock) / BLOCK_TIME : 0;
-    const urgent = late >= 2.5, warm = late >= 1.25;
+    const urgent = late >= 2.5, warm = late >= 1.25, onTime = late < 1;   // < 1 == inside the 60s block time
     const pulse = warm ? 0.5 + 0.5*Math.sin(time * (urgent ? 7 : 4)) : 0;
     const y = geo.gantryY + (urgent ? Math.sin(time*22) * Math.min(1.6, (late-2.5)*1.2) : 0);
-    const heroCol  = urgent ? "#ff5d5d" : warm ? "#ff9a3c" : "#ffcf5a";
-    const heroGlow = urgent ? "#ff2e2e" : warm ? "#ff7a1a" : "#ffb03a";
+    const heroCol  = urgent ? "#ff5d5d" : warm ? "#ff9a3c" : onTime ? "#3dff9a" : "#ffcf5a";
+    const heroGlow = urgent ? "#ff2e2e" : warm ? "#ff7a1a" : onTime ? "#3dff9a" : "#ffb03a";
     const heroBlur = urgent ? 12 + pulse*18 : warm ? 9 + pulse*9 : 8;
     const edge = urgent ? `rgba(255,70,70,${(0.55 + pulse*0.4).toFixed(3)})`
                : warm  ? `rgba(255,150,50,${(0.45 + pulse*0.3).toFixed(3)})`
-                       : "rgba(123,47,214,0.5)";
+               : onTime ? "rgba(61,255,154,0.5)"
+                        : "rgba(123,47,214,0.5)";
     // posts
     ctx.strokeStyle = "#2a1c48"; ctx.lineWidth = 5;
     ctx.beginPath(); ctx.moveTo(x0+4, 0); ctx.lineTo(x0+4, y+bh-6); ctx.stroke();
