@@ -422,8 +422,6 @@
     buses.push(makeBus(true));
     blockClock = BLOCK_TIME;
     beltBurst = 1.6;                 // the walkway surges forward as the block lands
-    // keep exactly one coinbase astronaut en route toward the forming block
-    if (!people.some(pp => pp.coinbase && pp.state === "walking")) spawnCoinbase();
     flash = 1; flashColor = algoOf(algo).color;
     pushRecentBlock({ height: (block ? block.height : stat.height), algo });
   }
@@ -891,24 +889,36 @@
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     ctx.beginPath(); ctx.ellipse(cx, y+h*0.12, w*0.26, h*0.05, 0, 0, 6.28); ctx.fill();
 
-    // cockpit dome with boarded Veilians
-    const domeY = y+h*0.09, domeH = h*0.26, domeW = w*0.66;
+    // cockpit dome — the coinbase astronaut pilots every block; tx passengers ride behind
+    const domeY = y+h*0.09, domeH = h*0.26, domeW = w*0.66, domeCY = domeY+domeH*0.5;
     ctx.fillStyle = "#0a1420";
-    ctx.beginPath(); ctx.ellipse(cx, domeY+domeH*0.5, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.fill();
     const dg = ctx.createLinearGradient(cx, domeY, cx, domeY+domeH);
     dg.addColorStop(0,"rgba(150,220,255,0.22)"); dg.addColorStop(1,"rgba(20,40,70,0.5)");
-    ctx.fillStyle = dg; ctx.beginPath(); ctx.ellipse(cx, domeY+domeH*0.5, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.fill();
+    ctx.fillStyle = dg; ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.fill();
     ctx.strokeStyle = hexA(oc,0.6); ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.ellipse(cx, domeY+domeH*0.5, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.stroke();
-    const seatMax = 12, seatN = Math.min(seatMax, b.passengers.length), cols = 4;
+    ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.stroke();
+    // tx passengers (boarded mempool txs) — little coloured heads behind the pilot
+    const seatMax = 10, seatN = Math.min(seatMax, b.passengers.length), cols = 5;
     for (let i=0;i<seatN;i++){
-      const p = b.passengers[i], col = TX_TYPES[p.tx.type].color;
-      const sx = cx - domeW*0.34 + (i%cols)*(domeW*0.68/(cols-1));
-      const sy = domeY + domeH*0.30 + Math.floor(i/cols)*(domeH*0.4);
-      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 6;
-      ctx.beginPath(); ctx.arc(sx, sy, 3.1, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
-      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-1, sy-1, 1, 0, 6.28); ctx.fill();
+      const p = b.passengers[i], col = (TX_TYPES[p.tx.type] || TX_TYPES.base).color;
+      const sx = cx - domeW*0.32 + (i%cols)*(domeW*0.64/(cols-1));
+      const sy = domeCY + domeH*0.14 + Math.floor(i/cols)*(domeH*0.26);
+      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 5;
+      ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-0.8, sy-0.8, 0.9, 0, 6.28); ctx.fill();
     }
+    // the coinbase astronaut — always at the helm, so every block shows its miner
+    const ax = cx, ay = domeCY - domeH*0.08, as = Math.max(3.6, domeW*0.12);
+    ctx.strokeStyle = "#cfd8e6"; ctx.lineWidth = 1.4; ctx.lineCap = "round";        // pickaxe (miner/staker)
+    ctx.beginPath(); ctx.moveTo(ax+as*1.5, ay+as*1.5); ctx.lineTo(ax-as*1.1, ay-as*1.2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ax-as*1.8, ay-as*0.8); ctx.lineTo(ax-as*0.5, ay-as*1.5); ctx.stroke();
+    ctx.fillStyle = "#eef2f8"; ctx.beginPath(); ctx.arc(ax, ay, as, 0, 6.28); ctx.fill();           // helmet
+    const avg = ctx.createLinearGradient(ax-as, ay-as*0.6, ax+as, ay+as*0.6);
+    avg.addColorStop(0, "#2a3550"); avg.addColorStop(1, "#0c1424");
+    ctx.fillStyle = avg; ctx.beginPath(); ctx.ellipse(ax, ay+as*0.08, as*0.68, as*0.74, 0,0,6.28); ctx.fill();  // visor
+    ctx.fillStyle = hexA(oc,0.9); ctx.shadowColor = oc; ctx.shadowBlur = 5;
+    ctx.beginPath(); ctx.arc(ax-as*0.24, ay-as*0.12, as*0.2, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;         // visor glint
 
     // the real Veil logo, faded, watermarked on the hull (like a coin on the block car)
     if (veilLogo.complete && veilLogo.naturalWidth){
@@ -931,7 +941,7 @@
 
     // labels
     const bh = b.blockHeight!=null ? b.blockHeight : stat.height+1;
-    const bt = b.blockTxcount!=null ? b.blockTxcount : b.passengers.length;
+    const bt = b.blockTxcount!=null ? b.blockTxcount : (b.passengers.length + 1);   // +1 = the coinbase pilot
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(233,226,255,0.9)"; ctx.font = "800 10px ui-monospace, monospace"; ctx.fillText("BLOCK", cx, y+h*0.66);
     ctx.fillStyle = oc; ctx.font = "800 12px ui-monospace, monospace"; ctx.fillText("#"+bh.toLocaleString(), cx, y+h*0.74);
@@ -1070,6 +1080,12 @@
     ctx.strokeStyle = "#b9c2d4"; ctx.lineWidth = 3*s; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(x-2.6*s, y+2*s); ctx.lineTo(x-3*s+step*3*s, y+9*s); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x+2.6*s, y+2*s); ctx.lineTo(x+3*s-step*3*s, y+9*s); ctx.stroke();
+    // pickaxe slung over the shoulder — the coinbase is the miner / staker
+    ctx.strokeStyle = "#8a734a"; ctx.lineWidth = 1.7*s; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x+4*s, y+5*s); ctx.lineTo(x-5*s, y-9*s); ctx.stroke();      // handle
+    ctx.strokeStyle = "#cfd8e6"; ctx.lineWidth = 2.4*s; ctx.shadowColor = gl; ctx.shadowBlur = 5*s;
+    ctx.beginPath(); ctx.moveTo(x-8*s, y-7*s); ctx.lineTo(x-2*s, y-11*s); ctx.stroke();      // steel head
+    ctx.shadowBlur = 0;
     // thruster glow
     ctx.fillStyle = hexA(gl,0.5); ctx.shadowColor = gl; ctx.shadowBlur = 8*s;
     ctx.beginPath(); ctx.arc(x, y+6.5*s, 1.6*s, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
@@ -1176,17 +1192,17 @@
 
   // HUD
   function renderHUD(){
-    const lead = buses.find(b=>b.state==="waiting") || buses[0];
-    const boarding = lead ? lead.passengers.length : 0;
+    const lead = buses.find(b=>b.state==="waiting");        // only the ship actually boarding
+    const aboard = lead ? lead.passengers.length + 1 : 1;   // +1 = the coinbase pilot
     if (LIVE){
       el.btLabel.textContent = "Last Block";
       el.btVal.textContent = Math.floor(Math.max(0, stat.lastBlock)) + "s";
-      el.btSub.textContent = boarding + " tx boarding";
+      el.btSub.textContent = aboard + " tx aboard";
       el.btFill.style.width = Math.min(100, stat.lastBlock/BLOCK_TIME*100) + "%";
     } else {
       el.btLabel.textContent = "Next Block In";
       el.btVal.textContent = Math.ceil(Math.max(0, blockClock));
-      el.btSub.textContent = boarding + " tx boarding";
+      el.btSub.textContent = aboard + " tx aboard";
       el.btFill.style.width = (100*(1 - blockClock/BLOCK_TIME)) + "%";
     }
   }
@@ -1224,7 +1240,7 @@
   // Live feed — reads the Veil node through the backend at /api/state.
   // Falls back to the built-in simulation when no node/feed is reachable.
   // ---------------------------------------------------------------------------
-  let LIVE = false, feedMode = "sim", feedSeq = 0, feedFirst = true;
+  let LIVE = false, feedMode = "sim", feedSeq = 0, feedFirst = true, blockClockSynced = false;
   function updateModeBadge(m){
     if (!el.modeBadge) return;
     el.modeBadge.className = "mode-badge " + (m==="live" ? "live" : m==="offline" ? "offline" : "sim");
@@ -1245,7 +1261,8 @@
     recentTx = []; renderTxList();
     recentBlocks = []; renderRecentBlocks();  // drop simulated blocks
     people.length = 0;                        // remove the boot-seed Veilians so none stampede the ship
-    initBuses(); spawnCoinbase();             // start live with a fresh, empty mothership
+    initBuses();                              // start live with a fresh, empty mothership
+    blockClockSynced = false;                 // re-sync the "time since block" clock from the node
     if (!didRestore){ didRestore = true; restoreState(); }   // repopulate the sidebar from last session
   }
   // ---- persist recent state across refresh / resize ----
@@ -1278,6 +1295,8 @@
       if (s.difficulty) stat.difficulty = s.difficulty;
       if (s.hashrate) stat.hashrate = s.hashrate;
       if (typeof s.mempool === "number") stat.mempool = s.mempool;
+      // initialise the "time since last block" from the node once, then let it tick locally
+      if (!blockClockSynced && typeof s.sinceBlock === "number"){ stat.lastBlock = s.sinceBlock; blockClockSynced = true; }
     }
   }
   function onLiveTx(ev){
@@ -1308,7 +1327,6 @@
   updateModeBadge("sim");
   renderStats();
   for (let i=0;i<16;i++) spawnPerson(Math.random()*H*0.7);   // seed the street until the feed answers
-  spawnCoinbase();                                            // one astronaut always heading to the ship
   setInterval(renderStats, 600);
   setInterval(saveState, 2000);
   window.addEventListener("beforeunload", saveState);

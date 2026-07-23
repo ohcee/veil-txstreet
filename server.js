@@ -42,22 +42,26 @@ const CFG = {
   pollMs: +(process.env.POLL_MS || fileCfg.pollMs || 2500),
   mockBlockMs: +(process.env.MOCK_BLOCK_MS || fileCfg.mockBlockMs || 60000),
   // VEIL→USD price for fee estimates. Pin VEIL_USD / config.veilUsd to override
-  // the auto price (CoinGecko id "veil"); coinId lets you point at another market.
+  // the auto price (NonKYC market); veilMarket points at another NonKYC pair.
   veilUsd: +(process.env.VEIL_USD || fileCfg.veilUsd || 0),
-  coinId: process.env.VEIL_COIN_ID || fileCfg.coinId || "veil",
+  veilMarket: process.env.VEIL_MARKET || fileCfg.veilMarket || "VEIL_USDT",
 };
 
 // ---------------------------------------------------------------------------
-// VEIL/USD price (for dollar fee estimates) — pinned, or polled from CoinGecko
+// VEIL/USD price (for dollar fee estimates) — pinned, or polled from NonKYC
 // ---------------------------------------------------------------------------
 let usdPrice = CFG.veilUsd;                 // 0 until known
 const priceAuto = !CFG.veilUsd;             // only auto-fetch when not pinned
 function fetchPrice() {
   if (!priceAuto) return;
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(CFG.coinId)}&vs_currencies=usd`;
+  const url = `https://api.nonkyc.io/api/v2/market/getbysymbol/${encodeURIComponent(CFG.veilMarket)}`;
   https.get(url, { headers: { accept: "application/json", "user-agent": "veilstreet/1.0" }, timeout: 8000 }, res => {
     let d = ""; res.on("data", c => (d += c));
-    res.on("end", () => { try { const j = JSON.parse(d); const p = j[CFG.coinId] && j[CFG.coinId].usd; if (p > 0) usdPrice = p; } catch (_) {} });
+    res.on("end", () => { try {
+      const j = JSON.parse(d);
+      const p = parseFloat(j.primaryUsdValue) || j.lastPriceNumber || parseFloat(j.lastPrice);
+      if (p > 0) usdPrice = p;
+    } catch (_) {} });
   }).on("error", () => {}).on("timeout", function () { this.destroy(); });
 }
 if (priceAuto) { fetchPrice(); setInterval(fetchPrice, 300000); }   // refresh every 5 min
@@ -173,6 +177,7 @@ function pumpTx() {
 // ---------------------------------------------------------------------------
 const known = new Set();
 let lastHeight = null;
+let tipTime = null;                       // unix time of the tip block (for "time since block")
 let warned = false;
 
 async function poll() {
@@ -181,25 +186,44 @@ async function poll() {
     const mining = await rpc("getmininginfo").catch(() => null);
     const mem = await rpc("getmempoolinfo").catch(() => ({ size: 0 }));
     const height = info.blocks;
-    stats = {
-      mode: "live", network: info.chain || "main", height,
-      difficulty: info.difficulty || 0,
-      hashrate: mining ? (mining.networkhashps || 0) : 0,
-      mempool: mem.size || 0, usd: usdPrice, updated: Date.now(),
-    };
+
+    // first poll: learn the tip block time so "time since block" survives a refresh
+    if (lastHeight === null) {
+      try { const th = await rpc("getblockhash", [height]); const tb = await rpc("getblock", [th]); tipTime = tb.time || tipTime; } catch (_) {}
+    }
 
     // new blocks
     if (lastHeight != null && height > lastHeight) {
       for (let h = lastHeight + 1; h <= height; h++) {
         try {
           const hash = await rpc("getblockhash", [h]);
-          const blk = await rpc("getblock", [hash]);
-          push({ kind: "block", height: h, hash, txcount: (blk.tx || []).length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000 });
-          for (const tid of (blk.tx || [])) known.delete(tid);
+          let blk, full = true;
+          try { blk = await rpc("getblock", [hash, 2]); } catch (_) { blk = await rpc("getblock", [hash]); full = false; }
+          const txs = blk.tx || [];
+          push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000 });
+          tipTime = blk.time || tipTime;
+          // surface confirmed txs we never saw in the mempool, so the feed matches the explorer
+          txs.forEach((tx, idx) => {
+            const tid = full ? (tx.txid || tx) : tx;
+            if (idx > 0 && !known.has(tid)) {                 // idx 0 is the coinbase (shown as the astronaut)
+              if (full) push({ kind: "tx", txid: tid, vsize: tx.vsize || tx.size || 500, fee: 0, type: classify(tx), time: blk.time || Date.now() / 1000 });
+              else push({ kind: "tx", txid: tid, vsize: 800, fee: 0, type: heuristicType(800), time: blk.time || Date.now() / 1000 });
+            }
+            known.delete(tid);
+          });
         } catch (_) {}
       }
     }
     lastHeight = height;
+
+    stats = {
+      mode: "live", network: info.chain || "main", height,
+      difficulty: info.difficulty || 0,
+      hashrate: mining ? (mining.networkhashps || 0) : 0,
+      mempool: mem.size || 0, usd: usdPrice,
+      sinceBlock: tipTime ? Math.max(0, Date.now() / 1000 - tipTime) : 0,
+      updated: Date.now(),
+    };
 
     // mempool diff
     const mp = await rpc("getrawmempool", [true]);
@@ -207,9 +231,13 @@ async function poll() {
     const curSet = new Set(cur);
     for (const tid of [...known]) if (!curSet.has(tid)) known.delete(tid);
     const fresh = cur.filter(t => !known.has(t));
-    const CAP = 40;                       // animate at most CAP new tx per poll
+    const CAP = 120;                      // classify (via RPC) up to CAP new tx per poll
     fresh.slice(0, CAP).forEach(tid => { known.add(tid); enqueueTx(tid, mp[tid]); });
-    fresh.slice(CAP).forEach(tid => known.add(tid));  // absorb the rest silently
+    fresh.slice(CAP).forEach(tid => {     // overflow: still surface it (size heuristic, no RPC)
+      known.add(tid);
+      const mpx = mp[tid], vsize = mpx.vsize || mpx.size || 500;
+      push({ kind: "tx", txid: tid, vsize, fee: mpx.fee != null ? mpx.fee : (mpx.fees && mpx.fees.base) || 0, type: heuristicType(vsize), time: mpx.time || Date.now() / 1000 });
+    });
     warned = false;
   } catch (e) {
     stats = { ...stats, mode: "offline", updated: Date.now() };
