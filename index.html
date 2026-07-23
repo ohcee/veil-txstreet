@@ -980,22 +980,9 @@
       ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
       ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-0.8, sy-0.8, 0.9, 0, 6.28); ctx.fill();
     }
-    // the coinbase astronaut — drawn only after a miner has walked down and boarded
+    // the coinbase astronaut at the helm — drawn only after a miner has boarded (no pickaxe in the cockpit)
     if (b.hasPilot){
-    const ax = cx, ay = domeCY - domeH*0.04, as = Math.max(2.6, domeW*0.088);
-    // pickaxe over the shoulder (miner / staker): wooden handle + curved steel head
-    const hgx = ax + as*1.7, hgy = ay + as*1.8;   // grip (lower right)
-    const hdx = ax - as*1.35, hdy = ay - as*1.5;  // head (upper left, above the shoulder)
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#9a6b3f"; ctx.lineWidth = Math.max(1.6, as*0.34);           // handle
-    ctx.beginPath(); ctx.moveTo(hgx, hgy); ctx.lineTo(hdx, hdy); ctx.stroke();
-    ctx.strokeStyle = "#7a5330"; ctx.lineWidth = Math.max(0.6, as*0.12);           // handle grain
-    ctx.beginPath(); ctx.moveTo(hgx, hgy); ctx.lineTo(hdx, hdy); ctx.stroke();
-    ctx.strokeStyle = "#d7deea"; ctx.lineWidth = Math.max(1.4, as*0.3);            // steel head (double curved pick)
-    ctx.beginPath(); ctx.moveTo(hdx - as*1.0, hdy + as*0.55);
-    ctx.quadraticCurveTo(hdx, hdy - as*0.85, hdx + as*1.05, hdy - as*0.1); ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.lineWidth = Math.max(0.5, as*0.1);  // glint
-    ctx.beginPath(); ctx.moveTo(hdx - as*0.35, hdy - as*0.15); ctx.lineTo(hdx + as*0.5, hdy - as*0.3); ctx.stroke();
+    const ax = cx, ay = domeCY - domeH*0.02, as = Math.max(2.1, domeW*0.066);
     ctx.fillStyle = "#eef2f8"; ctx.beginPath(); ctx.arc(ax, ay, as, 0, 6.28); ctx.fill();           // helmet
     const avg = ctx.createLinearGradient(ax-as, ay-as*0.6, ax+as, ay+as*0.6);
     avg.addColorStop(0, "#2a3550"); avg.addColorStop(1, "#0c1424");
