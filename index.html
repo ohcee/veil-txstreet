@@ -408,7 +408,7 @@
   // ---------------------------------------------------------------------------
   // Scenery: scrolling hedges/clouds on the sidewalk, checker + dashes offset
   // ---------------------------------------------------------------------------
-  let hedges = [], stars = [], planets = [];
+  let hedges = [], stars = [], planets = [], trees = [];
   let scroll = 0;                 // world scroll for belt texture + drifting moons
   function buildScenery() {
     hedges = [];
@@ -417,6 +417,16 @@
       hedges.push({ y, x: geo.sidewalkX0 + Math.random() * (geo.sidewalkX1 - geo.sidewalkX0) * 0.4,
         r: 26 + Math.random() * 26, hue: Math.random() < 0.5 ? "#1f5a52" : "#2a3f7a", puffs: 4 + (Math.random()*3|0) });
       y += 70 + Math.random() * 60;
+    }
+    // strange space trees lining the walkway, leaning inward to funnel Veilians toward the ship
+    trees = [];
+    for (let ty = -20; ty < H + 70; ty += 92 + Math.random()*44){
+      for (const side of [0, 1]){
+        const x = side ? geo.roadX1 - 13 - Math.random()*9 : geo.roadX0 + 13 + Math.random()*9;
+        trees.push({ x, y: ty + (side ? 46 : 0), s: 0.8 + Math.random()*0.5,
+          hue: Math.random() < 0.5 ? "#3dffc4" : "#9a6cff",
+          ph: Math.random()*6.28, lean: (side ? -1 : 1) * (0.14 + Math.random()*0.13) });
+      }
     }
     stars = [];
     for (let i = 0; i < 190; i++) stars.push({ x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.4+0.3,
@@ -453,6 +463,42 @@
     }
     ctx.strokeStyle = "rgba(150,180,255,0.4)"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(mx, my, r, 0, 6.28); ctx.stroke();
+  }
+
+  // strange bioluminescent space trees lining the walkway
+  function drawSpaceTrees(time){ for (const t of trees) drawSpaceTree(t, time); }
+  function drawSpaceTree(t, time){
+    const s = t.s, sway = Math.sin(time*1.1 + t.ph) * 0.06;
+    const bx = t.x, by = t.y, h = 46*s;
+    const tipX = bx + Math.sin(t.lean + sway) * h * 0.55, tipY = by - h;
+    ctx.save();
+    // pooled glow at the base, lighting the path
+    const gg = ctx.createRadialGradient(bx, by, 1, bx, by, 15*s);
+    gg.addColorStop(0, hexA(t.hue, 0.22)); gg.addColorStop(1, hexA(t.hue, 0));
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(bx, by, 15*s, 5*s, 0,0,6.28); ctx.fill();
+    // trunk — dark, tapering, with a glowing seam
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#241a3f"; ctx.lineWidth = 3.4*s;
+    ctx.beginPath(); ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(bx + (tipX-bx)*0.25, by - h*0.55, tipX, tipY); ctx.stroke();
+    ctx.strokeStyle = hexA(t.hue, 0.38); ctx.lineWidth = 1.1*s;
+    ctx.beginPath(); ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(bx + (tipX-bx)*0.25, by - h*0.55, tipX, tipY); ctx.stroke();
+    // drooping tendrils
+    ctx.strokeStyle = hexA(t.hue, 0.42); ctx.lineWidth = 1*s;
+    for (let i=-1;i<=1;i+=2){
+      ctx.beginPath(); ctx.moveTo(tipX + i*5*s, tipY + 2*s);
+      ctx.quadraticCurveTo(tipX + i*8.5*s, tipY + 10*s, tipX + i*5*s, tipY + 17*s); ctx.stroke();
+    }
+    // glowing canopy pods
+    ctx.shadowColor = t.hue; ctx.shadowBlur = 10*s;
+    for (let i=0;i<3;i++){
+      const a = -0.95 + i*0.95 + sway*2, r = (5.6 - i*0.95)*s;
+      ctx.fillStyle = hexA(t.hue, 0.78);
+      ctx.beginPath(); ctx.ellipse(tipX + Math.cos(a)*7*s, tipY + Math.sin(a)*5*s - 2*s, r, r*0.8, 0,0,6.28); ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
   }
 
   // ---------------------------------------------------------------------------
@@ -512,7 +558,7 @@
     people.push({
       tx: { type: "base", vsize: 300, fee: 0, hash: "" },
       type: TX_TYPES.base, size: 1.12, speed: 50 + Math.random()*22, spawnX,
-      x: spawnX, y: -30 - Math.random()*40,
+      x: spawnX, y: H * (0.10 + Math.random()*0.16), tp: 1,   // teleports in near the top of the walkway
       phase: Math.random()*6.28, sway: Math.random()*6.28,
       state: "walking", boards: true, miner: true,
       cloakGoal: 0.4, cloak: 0, shards: [], targetBus: null, seat: 0,
@@ -569,7 +615,9 @@
     const speed = 42 + feePriority * 120 + Math.random() * 20;   // px/sec downward
     const p = {
       tx, type, size, speed, spawnX,
-      x: spawnX, y: d.atY == null ? -30 - Math.random() * 40 : d.atY,
+      x: spawnX, y: d.atY == null ? H * (0.10 + Math.random() * 0.16) : d.atY,
+      tp: d.atY == null ? 1 : 0,                                // 1 = teleporting in
+
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
       state: "walking", boards: Math.random() < 0.92,
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
@@ -764,7 +812,9 @@
       if (p.cloak < p.cloakGoal) p.cloak = Math.min(p.cloakGoal, p.cloak + dt * 0.9);
 
       if (p.state === "walking") {
-        p.y += p.speed * dt;
+        // materialise first, then start walking the avenue
+        if (p.tp > 0) p.tp = Math.max(0, p.tp - dt * 1.7);
+        if (!(p.tp > 0.45)) p.y += p.speed * dt;
         // veil shard emission for shielded
         if (p.type.key !== "base" && Math.random() < dt * (p.type.key === "ringct" ? 7 : 3)) {
           p.shards.push({ x: p.x + (Math.random()-0.5)*16*p.size, y: p.y - 8*p.size,
@@ -846,6 +896,7 @@
 
     drawSidewalk(time);
     drawRoad(time);
+    drawSpaceTrees(time);      // the tree-lined avenue guiding Veilians to the ship
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
 
@@ -1117,12 +1168,32 @@
       ctx.fillStyle = ag; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.28); ctx.fill();
     }
 
+    // teleport-in: a beam from above and a landing ring while the figure materialises
+    const tp = p.tp || 0;
+    if (tp > 0){
+      const bw = 9*s*(0.5 + tp);
+      const bg = ctx.createLinearGradient(x, y - H, x, y + 6*s);
+      bg.addColorStop(0, hexA(gl, 0));
+      bg.addColorStop(0.72, hexA(gl, 0.10*tp));
+      bg.addColorStop(1, hexA(gl, 0.5*tp));
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.moveTo(x-bw*0.32, y-H); ctx.lineTo(x+bw*0.32, y-H);
+      ctx.lineTo(x+bw, y+6*s); ctx.lineTo(x-bw, y+6*s); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = hexA(gl, 0.85*tp); ctx.lineWidth = 2*s;
+      const rr = 1.35 - tp*0.65;
+      ctx.beginPath(); ctx.ellipse(x, y+6*s, 12*s*rr, 4*s*rr, 0,0,6.28); ctx.stroke();
+    }
+
+    ctx.save();
+    if (tp > 0) ctx.globalAlpha = Math.min(1, (1 - tp) * 2.2);   // fade in as it lands
     if (p.miner) drawAstronaut(x, y, s, step, time, p);
     else drawBeing(x, y, s, step, tc, gl, time, p,
               p.type.key === "base" ? "human" : p.type.key === "stealth" ? "hybrid" : "alien");
+    ctx.restore();
 
     // size glyph for large tx
-    if (s > 1.35 && !p.miner){ ctx.fillStyle = hexA(gl, 0.9); ctx.textAlign = "center";
+    if (s > 1.35 && !p.miner && tp <= 0){ ctx.fillStyle = hexA(gl, 0.9); ctx.textAlign = "center";
       ctx.font = "700 8px ui-monospace, monospace"; ctx.fillText(fmtSize(p.tx.vsize), x, y-16*s); }
   }
 
