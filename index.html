@@ -104,11 +104,32 @@
   .legend-row { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--text-dim); margin: 4px 0; }
   .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
 
-  .block-timer {
+  .right-stack {
     position: absolute; right: 10px; top: 10px; z-index: 5;
+    display: flex; flex-direction: column; gap: 10px; align-items: stretch;
+  }
+  .block-timer {
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 10px 16px; text-align: center; backdrop-filter: blur(8px); min-width: 150px;
   }
+  /* compact 5-block explorer under the recent-blocks strip (wide screens only) */
+  .mini-explorer {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 9px 11px 10px; backdrop-filter: blur(8px); min-width: 186px;
+  }
+  .me-list { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+  .me-row {
+    display: grid; grid-template-columns: 8px 1fr auto auto; align-items: center; gap: 7px;
+    padding: 4px 6px; border-radius: 6px; cursor: pointer;
+    font-size: 10px; font-variant-numeric: tabular-nums;
+    background: rgba(255,255,255,0.03); border: 1px solid transparent; transition: background 0.15s, border-color 0.15s;
+  }
+  .me-row:hover { background: rgba(123,47,214,0.16); border-color: var(--border); }
+  .me-dot { width: 8px; height: 8px; border-radius: 2px; }
+  .me-h { color: var(--text); font-weight: 700; }
+  .me-tx { color: var(--text-dim); font-size: 9px; }
+  .me-ago { color: var(--text-faint); font-size: 9px; min-width: 26px; text-align: right; }
+  @media (max-width: 1180px) { .mini-explorer { display: none; } }
   .bt-label { font-size: 8.5px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; }
   .bt-value { font-size: 26px; font-weight: 800; color: var(--veil-cyan); margin: 2px 0; font-variant-numeric: tabular-nums; }
   .bt-sub { font-size: 9px; color: var(--text-dim); letter-spacing: 0.5px; }
@@ -207,7 +228,8 @@
     .stat { flex: 1 1 0; min-width: 0; padding: 5px 6px; text-align: center; }
     .stat-value { font-size: 12px; }
     .stat-label { font-size: 7px; letter-spacing: 0.8px; }
-    .block-timer { right: 10px; top: 10px; padding: 8px 12px; min-width: 126px; transform: scale(0.9); transform-origin: top right; }
+    .right-stack { transform: scale(0.9); transform-origin: top right; }
+    .block-timer { padding: 8px 12px; min-width: 126px; }
   }
 </style>
 </head>
@@ -252,14 +274,20 @@
   <div id="stage">
     <canvas id="scene"></canvas>
 
-    <div class="block-timer">
-      <div class="rb-title">Recent blocks · algorithm</div>
-      <div class="rb-chips" id="rbChips"></div>
-      <div class="rb-legend">
-        <span><i style="background:#3dff9a"></i>PoS</span>
-        <span><i style="background:#4da3ff"></i>ProgPoW</span>
-        <span><i style="background:#ffab3d"></i>RandomX</span>
-        <span><i style="background:#ff5d7a"></i>SHA256d</span>
+    <div class="right-stack">
+      <div class="block-timer">
+        <div class="rb-title">Recent blocks · algorithm</div>
+        <div class="rb-chips" id="rbChips"></div>
+        <div class="rb-legend">
+          <span><i style="background:#3dff9a"></i>PoS</span>
+          <span><i style="background:#4da3ff"></i>ProgPoW</span>
+          <span><i style="background:#ffab3d"></i>RandomX</span>
+          <span><i style="background:#ff5d7a"></i>SHA256d</span>
+        </div>
+      </div>
+      <div class="mini-explorer">
+        <div class="rb-title">Latest blocks</div>
+        <div class="me-list" id="meList"></div>
       </div>
     </div>
 
@@ -474,7 +502,8 @@
     // send the next block's single coinbase miner walking down (one at a time)
     if (!people.some(p => p.miner && p.state === "walking")) spawnMiner();
     flash = 1; flashColor = algoOf(algo).color;
-    pushRecentBlock({ height: (block ? block.height : stat.height), algo });
+    pushRecentBlock({ height: (block ? block.height : stat.height), algo,
+      txcount: block && block.txcount != null ? block.txcount : null, t: Date.now() });
   }
   let flash = 0, flashColor = "#3dff9a", beltBurst = 0;
   // the block's one coinbase: a miner astronaut that walks down and pilots the ship
@@ -499,6 +528,27 @@
       const c = document.createElement("div"); c.className = "rb-chip"; c.style.background = a.color;
       c.title = a.name + (b.height ? " · #" + b.height.toLocaleString() : "");
       frag.appendChild(c); }
+    host.replaceChildren(frag);
+    renderMiniExplorer();
+  }
+  // compact 5-block explorer under the strip; click a row to open it in the Veil explorer
+  function renderMiniExplorer(){
+    const host = document.getElementById("meList"); if (!host) return;
+    const frag = document.createDocumentFragment();
+    for (const b of recentBlocks.slice(0, 5)){
+      const a = algoOf(b.algo);
+      const row = document.createElement("div");
+      row.className = "me-row";
+      if (b.height) row.setAttribute("data-h", b.height);
+      row.title = b.height ? "Open block #" + b.height.toLocaleString() + " in the Veil explorer" : a.name;
+      const ago = b.t ? Math.max(0, Math.round((Date.now() - b.t)/1000)) : null;
+      const dot = document.createElement("span"); dot.className = "me-dot"; dot.style.background = a.color;
+      const h = document.createElement("span"); h.className = "me-h"; h.textContent = "#" + (b.height||0).toLocaleString();
+      const tx = document.createElement("span"); tx.className = "me-tx"; tx.textContent = b.txcount != null ? b.txcount + " tx" : "";
+      const t = document.createElement("span"); t.className = "me-ago"; t.textContent = ago != null ? (ago < 90 ? ago + "s" : Math.round(ago/60) + "m") : "";
+      row.append(dot, h, tx, t);
+      frag.appendChild(row);
+    }
     host.replaceChildren(frag);
   }
 
@@ -648,6 +698,7 @@
     el.spStealth.textContent = c.stealth.toLocaleString();
     el.spRingct.textContent = c.ringct.toLocaleString();
     el.spPriv.textContent = (privacyRatio()*100).toFixed(1) + "%";
+    renderMiniExplorer();          // keeps the "ago" column ticking
   }
   setInterval(() => {
     if (LIVE) return;                       // node supplies these when live
@@ -1264,6 +1315,13 @@
   // Stats popover toggle
   const statsPop = document.getElementById("statsPop");
   document.getElementById("statsChip").addEventListener("click", () => statsPop.classList.toggle("open"));
+
+  // mini explorer rows -> open that block in the Veil explorer
+  const meListEl = document.getElementById("meList");
+  if (meListEl) meListEl.addEventListener("click", (e) => {
+    const row = e.target.closest(".me-row"); if (!row) return;
+    const h = row.getAttribute("data-h"); if (h) openExt(explorerBlock(+h));
+  });
 
   // canvas click -> inspect nearest person
   canvas.addEventListener("click", (e) => {
