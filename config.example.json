@@ -1,0 +1,17 @@
+{
+  "_comment": "Copy to config.json and edit, OR set the same values as env vars. Env vars win over this file.",
+
+  "port": 8790,
+  "feed": "rpc",
+
+  "rpcHost": "127.0.0.1",
+  "rpcPort": 58812,
+  "rpcUser": "veilrpc",
+  "rpcPass": "CHANGE_ME",
+
+  "_or_use_a_cookie_instead_of_user_pass": "point rpcCookie at your datadir/.cookie and remove rpcUser/rpcPass",
+  "rpcCookie": "",
+
+  "pollMs": 2500,
+  "mockBlockMs": 60000
+}

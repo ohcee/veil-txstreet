@@ -1,0 +1,14 @@
+{
+  "name": "veilstreet",
+  "version": "1.0.0",
+  "description": "TxStreet-style live privacy-transaction visualizer for Veil (VEIL)",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "mock": "FEED=mock node server.js"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT",
+  "author": "ohcee"
+}
