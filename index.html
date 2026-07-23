@@ -401,9 +401,18 @@
     geo.busH = geo.busW * 1.55;
     geo.busY = H * 0.42;                 // parked top edge of bus
     geo.boardY = geo.busY + geo.busH * 0.28;
-    geo.mergeY0 = geo.boardY - H * 0.14; // boarders walk straight, then merge late
+    geo.mergeY0 = geo.boardY - H * 0.08; // walk the T's stem, then cut right at its foot
     geo.gantryY = H * 0.115;
     geo.lightY = H * 0.045;
+    // T-shaped clearing cut through the left bush field: Veilians land along the
+    // top bar, funnel down the stem, and the foot of the stem is the entrance.
+    const rw = geo.roadX1 - geo.roadX0;
+    geo.tLeft  = geo.roadX0 + 4;
+    geo.tRight = geo.roadX0 + rw * 0.64;
+    geo.tBarY0 = H * 0.07;
+    geo.tBarY1 = H * 0.19;
+    geo.tStemC = geo.roadX0 + rw * 0.34;
+    geo.tStemW = Math.max(44, rw * 0.22);
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -411,7 +420,14 @@
   // ---------------------------------------------------------------------------
   // Scenery: scrolling hedges/clouds on the sidewalk, checker + dashes offset
   // ---------------------------------------------------------------------------
-  let hedges = [], stars = [], planets = [], trees = [];
+  let hedges = [], stars = [], planets = [], trees = [], bushes = [];
+  // the T-shaped walking corridor cut through the left bush field
+  function inTClearing(x, y){
+    const pad = 9;
+    if (y > geo.tBarY0 - pad && y < geo.tBarY1 + pad) return true;                      // top bar
+    if (y >= geo.tBarY1 && Math.abs(x - geo.tStemC) < geo.tStemW/2 + pad) return true;  // stem -> entrance
+    return false;
+  }
   let scroll = 0;                 // world scroll for belt texture + drifting moons
   function buildScenery() {
     hedges = [];
@@ -423,17 +439,23 @@
     }
     // strange space trees lining the walkway, leaning inward to funnel Veilians toward the ship
     trees = [];
-    // left edge: smaller and sparser, for depth
-    for (let ty = -20; ty < H + 80; ty += 116 + Math.random()*52){
-      trees.push({ x: geo.roadX0 + 12 + Math.random()*8, y: ty, s: 0.7 + Math.random()*0.35,
-        hue: Math.random() < 0.5 ? "#3dffc4" : "#9a6cff",
-        ph: Math.random()*6.28, lean: 0.14 + Math.random()*0.12 });
-    }
     // right edge: a tall, dense tree line running the whole side
     for (let ty = -50; ty < H + 100; ty += 58 + Math.random()*26){
       trees.push({ x: geo.roadX1 - 6 + Math.random()*12, y: ty, s: 1.5 + Math.random()*0.85,
         hue: Math.random() < 0.5 ? "#3dffc4" : "#9a6cff",
         ph: Math.random()*6.28, lean: -(0.16 + Math.random()*0.14) });
+    }
+    // left side: a dense bush field with a T-shaped clearing cut through it —
+    // Veilians land along the top bar and funnel down the stem to the entrance
+    bushes = [];
+    const bstep = 23;
+    for (let by = -14; by < geo.mergeY0; by += bstep*0.86){   // stops at the entrance (foot of the T)
+      for (let bx = geo.tLeft; bx < geo.tRight; bx += bstep){
+        const x = bx + (Math.random()-0.5)*11, y = by + (Math.random()-0.5)*11;
+        if (inTClearing(x, y)) continue;                       // keep the corridor open
+        bushes.push({ x, y, r: 8 + Math.random()*8, ph: Math.random()*6.28,
+          hue: Math.random() < 0.5 ? "#1f7a5a" : "#27618a" });
+      }
     }
     stars = [];
     for (let i = 0; i < 190; i++) stars.push({ x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.4+0.3,
@@ -472,6 +494,19 @@
     ctx.beginPath(); ctx.arc(mx, my, r, 0, 6.28); ctx.stroke();
   }
 
+  // dense alien bushes filling the left side around the T-shaped corridor
+  function drawBushes(time){
+    for (const b of bushes){
+      const s = b.r, sway = Math.sin(time*0.9 + b.ph) * 0.7;
+      ctx.fillStyle = b.hue;
+      ctx.beginPath(); ctx.ellipse(b.x - s*0.5 + sway, b.y + s*0.18, s*0.62, s*0.5, 0,0,6.28); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(b.x + s*0.5 + sway, b.y + s*0.18, s*0.62, s*0.5, 0,0,6.28); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(b.x + sway, b.y, s, s*0.78, 0,0,6.28); ctx.fill();
+      ctx.fillStyle = "rgba(150,255,215,0.28)";                        // bioluminescent speckles
+      ctx.beginPath(); ctx.arc(b.x - s*0.26 + sway, b.y - s*0.24, 1.1, 0, 6.28); ctx.fill();
+      ctx.beginPath(); ctx.arc(b.x + s*0.34 + sway, b.y - s*0.04, 0.9, 0, 6.28); ctx.fill();
+    }
+  }
   // strange bioluminescent space trees lining the walkway
   function drawSpaceTrees(time){ for (const t of trees) drawSpaceTree(t, time); }
   function drawSpaceTree(t, time){
@@ -561,11 +596,11 @@
   let flash = 0, flashColor = "#3dff9a", beltBurst = 0;
   // the block's one coinbase: a miner astronaut that walks down and pilots the ship
   function spawnMiner(){
-    const spawnX = geo.roadX0 + 16 + Math.random() * (geo.roadX1 - geo.roadX0 - 32);
+    const spawnX = geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20);   // land along the T's top bar
     people.push({
       tx: { type: "base", vsize: 300, fee: 0, hash: "" },
       type: TX_TYPES.base, size: 1.12, speed: 50 + Math.random()*22, spawnX,
-      x: spawnX, y: H * (0.10 + Math.random()*0.16), tp: 1,   // teleports in near the top of the walkway
+      x: spawnX, y: geo.tBarY0 + Math.random() * (geo.tBarY1 - geo.tBarY0), tp: 1,   // teleports onto the T's bar
       phase: Math.random()*6.28, sway: Math.random()*6.28,
       state: "walking", boards: true, miner: true,
       cloakGoal: 0.4, cloak: 0, shards: [], targetBus: null, seat: 0,
@@ -615,14 +650,14 @@
   // core factory — used by both the simulation and the live feed
   function addPerson(d) {
     const type = TX_TYPES[(d.type in TX_TYPES) ? d.type : "base"];
-    const spawnX = geo.roadX0 + 16 + Math.random() * (geo.roadX1 - geo.roadX0 - 32);
+    const spawnX = geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20);   // land along the T's top bar
     const tx = makeTxFromData(d);
     const size = sizeFromVsize(tx.vsize);
     const feePriority = Math.min(1, (tx.fee || 0) / 0.0004);
     const speed = 42 + feePriority * 120 + Math.random() * 20;   // px/sec downward
     const p = {
       tx, type, size, speed, spawnX,
-      x: spawnX, y: d.atY == null ? H * (0.10 + Math.random() * 0.16) : d.atY,
+      x: spawnX, y: d.atY == null ? geo.tBarY0 + Math.random() * (geo.tBarY1 - geo.tBarY0) : d.atY,
       tp: d.atY == null ? 1 : 0,                                // 1 = teleporting in
 
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
@@ -827,6 +862,11 @@
           p.shards.push({ x: p.x + (Math.random()-0.5)*16*p.size, y: p.y - 8*p.size,
             life: 1, vx:(Math.random()-0.5)*0.4, vy:-(0.2+Math.random()*0.5), r: 1+Math.random()*2 });
         }
+        // funnel out of the T's bar and down its stem toward the entrance
+        if (p.y > geo.tBarY1 && p.y < geo.mergeY0) {
+          p.x += (geo.tStemC - p.x) * Math.min(1, dt * 1.8);
+          p.spawnX = p.x;                       // the later lane merge starts from here
+        }
         // merge toward lane if boarding
         if (p.boards && boardingBus && p.y > geo.mergeY0) {
           const f = ease(Math.min(1, (p.y - geo.mergeY0) / (geo.boardY - geo.mergeY0)));
@@ -904,7 +944,7 @@
 
     drawSidewalk(time);
     drawRoad(time);
-    if (!NARROW) drawSpaceTrees(time);   // tree-lined avenue (dropped on phones to cut clutter)
+    if (!NARROW){ drawBushes(time); drawSpaceTrees(time); }   // bush field + tree line (dropped on phones)
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
 
