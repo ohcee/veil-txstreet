@@ -1237,7 +1237,9 @@
     stat.typeCount = { base:0, stealth:0, ringct:0 };
     recentTx = []; renderTxList();
     recentBlocks = []; renderRecentBlocks();  // drop simulated blocks
-    if (!didRestore){ didRestore = true; restoreState(); }   // repopulate from the last session
+    people.length = 0;                        // remove the boot-seed Veilians so none stampede the ship
+    initBuses(); spawnCoinbase();             // start live with a fresh, empty mothership
+    if (!didRestore){ didRestore = true; restoreState(); }   // repopulate the sidebar from last session
   }
   // ---- persist recent state across refresh / resize ----
   const SKEY = "veilstreet:v1";
