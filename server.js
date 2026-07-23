@@ -202,9 +202,9 @@ async function poll() {
           const txs = blk.tx || [];
           // txids let the UI group the feed's transactions under the block that confirmed them
           const txids = txs.slice(0, 60).map(t => (full ? (t.txid || t) : t));
-          push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000, txids });
           tipTime = blk.time || tipTime;
-          // surface confirmed txs we never saw in the mempool, so the feed matches the explorer
+          // surface confirmed txs we never saw in the mempool, so the feed matches the explorer.
+          // these go out BEFORE the block event, so the block can group them on arrival.
           txs.forEach((tx, idx) => {
             const tid = full ? (tx.txid || tx) : tx;
             if (idx > 0 && !known.has(tid)) {                 // idx 0 is the coinbase (shown as the astronaut)
@@ -213,6 +213,7 @@ async function poll() {
             }
             known.delete(tid);
           });
+          push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000, txids });
         } catch (_) {}
       }
     }

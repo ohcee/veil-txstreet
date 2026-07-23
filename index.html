@@ -642,8 +642,6 @@
     buses.push(makeBus(true));
     blockClock = BLOCK_TIME;
     beltBurst = 1.6;                 // the walkway surges forward as the block lands
-    // send the next block's single coinbase miner walking down (one at a time)
-    if (!people.some(p => p.miner && p.state === "walking")) spawnMiner();
     flash = 1; flashColor = algoOf(algo).color;
     pushRecentBlock({ height: (block ? block.height : stat.height), algo,
       txcount: block && block.txcount != null ? block.txcount : null, t: Date.now() });
@@ -655,7 +653,7 @@
     const spawnX = geo.mineX + (Math.random()-0.5) * 6;
     people.push({
       tx: { type: "base", vsize: 300, fee: 0, hash: "" },
-      type: TX_TYPES.base, size: 1.12, speed: 50 + Math.random()*22, spawnX,
+      type: TX_TYPES.base, size: 1.12, speed: 8 + Math.random()*4, spawnX,   // a slow trudge, so the climb is visible
       x: spawnX, y: geo.mineY + 4, tp: 0, climbing: true, climbX: geo.mineX,
       phase: Math.random()*6.28, sway: Math.random()*6.28,
       state: "walking", boards: true, miner: true,
@@ -791,10 +789,15 @@
     const rows = recentTx.filter(tx => !q || tx.hash.includes(q) || (tx.addr && tx.addr.toLowerCase().includes(q)));
     const frag = document.createDocumentFragment();
     let shown = 0;
-    const pending = rows.filter(tx => tx.bh == null);
+    // "Pending" is bounded by what the node actually reports in its mempool; anything else
+    // untagged is older traffic we couldn't attribute to a recent block
+    const untagged = rows.filter(tx => tx.bh == null);
+    const nPending = Math.max(0, Math.min(untagged.length, stat.mempool || 0));
+    const pending = untagged.slice(0, nPending);
+    const earlier = untagged.slice(nPending);
     if (pending.length){
       frag.appendChild(groupHeader("grp-pending", "#22e0d6", "Pending", pending.length + " tx",
-        "Transactions in the mempool, not yet in a block"));
+        "In the node's mempool, not yet in a block"));
       for (const tx of pending.slice(0, 14)){ frag.appendChild(txRow(tx, "#22e0d6")); shown++; }
     }
     // blocks newest first, each followed by its transactions
@@ -812,6 +815,12 @@
       if (b.height) hdr.setAttribute("data-h", b.height);
       frag.appendChild(hdr);
       for (const tx of mine.slice(0, 12)){ frag.appendChild(txRow(tx, col)); shown++; }
+    }
+    // anything we saw but couldn't pin to a recent block — not claimed as pending
+    if (earlier.length){
+      frag.appendChild(groupHeader("grp-earlier", "#5b6480", "Earlier", earlier.length + " tx",
+        "Seen earlier; not matched to a recent block"));
+      for (const tx of earlier.slice(0, 10)) frag.appendChild(txRow(tx, "#5b6480"));
     }
     txListEl.replaceChildren(frag);
   }
@@ -910,6 +919,10 @@
     scroll += dt * (6 + 150 * surge);
     stat.lastBlock += dt;
     if (!LIVE) { updateSpawner(dt); blockClock -= dt; if (blockClock <= 0) mineBlock(); }
+
+    // keep the forming block's coinbase climbing out of the mine (one at a time)
+    const formingShip = buses.find(b => b.state === "waiting");
+    if (formingShip && !formingShip.hasPilot && !people.some(p => p.miner && p.state === "walking")) spawnMiner();
 
 
     if (lightTimer > 0) { lightTimer -= dt; if (lightTimer <= 0) light = "red"; }
