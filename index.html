@@ -852,9 +852,9 @@
     ctx.save();
     ctx.globalAlpha = b.alpha;
 
-    // engine exhaust — fires downward as the ship lifts off upward
+    // engine exhaust — fires downward as the ship lifts off upward (two outboard engines)
     if (launching){
-      for (let i=-1;i<=1;i++){
+      for (const i of [-1, 1]){
         const ex = x + i*w*0.26, len = h*0.5 + Math.random()*h*0.3;
         const fg = ctx.createLinearGradient(ex, tailY, ex, tailY+len);
         fg.addColorStop(0, hexA(oc,0.9)); fg.addColorStop(0.4, hexA("#ffd27a",0.65)); fg.addColorStop(1, hexA(oc,0));
@@ -902,16 +902,17 @@
       ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-1, sy-1, 1, 0, 6.28); ctx.fill();
     }
 
-    // bold Veil mark on the hull (filled hex badge + veil swoosh)
-    const cy = y+h*0.52, rr = w*0.20;
+    // large faded Veil logo watermarked on the hull (like a coin on the block car)
+    const cy = y+h*0.54, rr = w*0.34;
+    ctx.save(); ctx.globalAlpha = b.alpha;
     ctx.beginPath();
     for (let i=0;i<6;i++){ const a=-Math.PI/2+i*Math.PI/3, px=cx+Math.cos(a)*rr, py=cy+Math.sin(a)*rr; i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
     ctx.closePath();
-    ctx.fillStyle = "#0a1330"; ctx.fill();
-    ctx.strokeStyle = "#22e0d6"; ctx.lineWidth = 2.6; ctx.shadowColor = "#22e0d6"; ctx.shadowBlur = 9; ctx.stroke();
-    ctx.strokeStyle = "#eafffb"; ctx.lineWidth = 2.6; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(cx-rr*0.62, cy-rr*0.28); ctx.quadraticCurveTo(cx, cy+rr*0.62, cx+rr*0.62, cy-rr*0.28); ctx.stroke();
-    ctx.shadowBlur = 0;
+    ctx.fillStyle = hexA(oc, 0.09); ctx.fill();
+    ctx.strokeStyle = hexA(oc, 0.30); ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = hexA("#eafffb", 0.22); ctx.lineWidth = 3.4; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(cx-rr*0.6, cy-rr*0.34); ctx.quadraticCurveTo(cx, cy+rr*0.55, cx+rr*0.6, cy-rr*0.34); ctx.stroke();
+    ctx.restore();
 
     // algorithm badge (once mined)
     if (b.algo){
@@ -928,21 +929,22 @@
     const bh = b.blockHeight!=null ? b.blockHeight : stat.height+1;
     const bt = b.blockTxcount!=null ? b.blockTxcount : b.passengers.length;
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(233,226,255,0.9)"; ctx.font = "800 10px ui-monospace, monospace"; ctx.fillText("BLOCK", cx, y+h*0.68);
-    ctx.fillStyle = oc; ctx.font = "800 12px ui-monospace, monospace"; ctx.fillText("#"+bh.toLocaleString(), cx, y+h*0.76);
-    ctx.fillStyle = "rgba(233,226,255,0.6)"; ctx.font = "700 9px ui-monospace, monospace"; ctx.fillText(bt+" tx", cx, y+h*0.83);
-    // registry
-    ctx.fillStyle = "#e9e2ff"; roundRect(cx-16, y+h*0.885, 32, 9, 2); ctx.fill();
-    ctx.fillStyle = "#160c2c"; ctx.font = "800 7px ui-monospace, monospace"; ctx.fillText("VEIL", cx, y+h*0.885+7);
+    ctx.fillStyle = "rgba(233,226,255,0.9)"; ctx.font = "800 10px ui-monospace, monospace"; ctx.fillText("BLOCK", cx, y+h*0.66);
+    ctx.fillStyle = oc; ctx.font = "800 12px ui-monospace, monospace"; ctx.fillText("#"+bh.toLocaleString(), cx, y+h*0.74);
+    ctx.fillStyle = "rgba(233,226,255,0.6)"; ctx.font = "700 9px ui-monospace, monospace"; ctx.fillText(bt+" tx", cx, y+h*0.81);
 
-    // engine nozzles
-    for (let i=-1;i<=1;i++){
+    // engine nozzles — two outboard, leaving the centre clear for the plate
+    for (const i of [-1, 1]){
       const ex = x + i*w*0.26;
       ctx.fillStyle = "#0a0714"; roundRect(ex-w*0.07, tailY-6, w*0.14, 8, 3); ctx.fill();
       ctx.fillStyle = launching ? "#ffe08a" : hexA(oc, isLead?0.8:0.5);
       ctx.shadowColor = oc; ctx.shadowBlur = launching?14:6;
       ctx.beginPath(); ctx.arc(ex, tailY-2, 2.2, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
     }
+
+    // registry plate — drawn last, dead-centre between the engines so nothing covers it
+    ctx.shadowBlur = 0; ctx.fillStyle = "#e9e2ff"; roundRect(cx-16, y+h*0.87, 32, 9, 2); ctx.fill();
+    ctx.fillStyle = "#160c2c"; ctx.font = "800 7px ui-monospace, monospace"; ctx.textAlign = "center"; ctx.fillText("VEIL", cx, y+h*0.87+7);
     ctx.restore();
   }
 
