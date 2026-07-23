@@ -48,12 +48,6 @@
   }
   .brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; position: relative; }
   .brand-mark { width: 38px; height: 38px; filter: drop-shadow(0 0 10px rgba(123,47,214,0.7)); }
-  .brand-alien {
-    position: absolute; left: 22px; top: -15px; width: 22px; height: 33px; z-index: 4;
-    transform-origin: 50% 4px; animation: alienSway 3.6s ease-in-out infinite;
-    filter: drop-shadow(0 0 5px rgba(61,255,154,0.45)); pointer-events: none;
-  }
-  @keyframes alienSway { 0%,100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
   .brand-text { display: flex; flex-direction: column; line-height: 1; }
   .brand-name {
     font-size: 20px; font-weight: 800; letter-spacing: 3px;
@@ -239,21 +233,6 @@
   <nav>
     <div class="brand">
       <img class="brand-mark" src="veil-mark.svg" alt="Veil" />
-      <svg class="brand-alien" viewBox="0 0 28 42" aria-hidden="true">
-        <path d="M14 15 Q19 7 24 5" stroke="#2f8f6a" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-        <ellipse cx="13" cy="25" rx="6" ry="7.6" fill="#2f8f6a"/>
-        <path d="M10 29 Q7 35 8.5 40" stroke="#2f8f6a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-        <path d="M16 29 Q19 35 17.5 40" stroke="#2f8f6a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-        <ellipse cx="13" cy="15" rx="7.2" ry="7.6" fill="#3dbb86"/>
-        <path d="M10 8.5 L8 3.5" stroke="#3dbb86" stroke-width="1.7" stroke-linecap="round"/>
-        <path d="M16 8.5 L18 3.5" stroke="#3dbb86" stroke-width="1.7" stroke-linecap="round"/>
-        <circle cx="8" cy="3.5" r="1.7" fill="#8ffff6"/>
-        <circle cx="18" cy="3.5" r="1.7" fill="#8ffff6"/>
-        <ellipse cx="10" cy="15" rx="1.9" ry="2.7" fill="#05030c"/>
-        <ellipse cx="16" cy="15" rx="1.9" ry="2.7" fill="#05030c"/>
-        <circle cx="10.6" cy="13.9" r="0.6" fill="#8ffff6"/>
-        <circle cx="16.6" cy="13.9" r="0.6" fill="#8ffff6"/>
-      </svg>
       <div class="brand-text">
         <div class="brand-name">VEIL</div>
         <div class="brand-tag">Built private · Built to last</div>
@@ -413,6 +392,8 @@
     geo.tBarY1 = H * 0.19;
     geo.tStemC = geo.roadX0 + rw * 0.34;
     geo.tStemW = Math.max(44, rw * 0.22);
+    geo.bBarY0 = geo.mergeY0 - H * 0.075;  // mirrored bar at the foot, same depth as the top bar
+    geo.bBarY1 = geo.mergeY0 + H * 0.045;
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -425,7 +406,8 @@
   function inTClearing(x, y){
     const pad = 9;
     if (y > geo.tBarY0 - pad && y < geo.tBarY1 + pad) return true;                      // top bar
-    if (y >= geo.tBarY1 && Math.abs(x - geo.tStemC) < geo.tStemW/2 + pad) return true;  // stem -> entrance
+    if (y > geo.bBarY0 - pad && y < geo.bBarY1 + pad) return true;                      // mirrored bottom bar
+    if (y >= geo.tBarY1 && y <= geo.bBarY0 && Math.abs(x - geo.tStemC) < geo.tStemW/2 + pad) return true;  // stem joining them
     return false;
   }
   let scroll = 0;                 // world scroll for belt texture + drifting moons
@@ -449,7 +431,7 @@
     // Veilians land along the top bar and funnel down the stem to the entrance
     bushes = [];
     const bstep = 23;
-    for (let by = -14; by < geo.mergeY0; by += bstep*0.86){   // stops at the entrance (foot of the T)
+    for (let by = -14; by < H + 34; by += bstep*0.86){   // full height; the bars/stem are cut out of it
       for (let bx = geo.tLeft; bx < geo.tRight; bx += bstep){
         const x = bx + (Math.random()-0.5)*11, y = by + (Math.random()-0.5)*11;
         if (inTClearing(x, y)) continue;                       // keep the corridor open
@@ -1400,18 +1382,46 @@
 
   // ---- stoplight + Blockchain sign at top of lane ----
   function drawStoplight(time){
-    const x = geo.laneX0 - 4, y = geo.lightY;
-    // pole
-    ctx.strokeStyle="#2a1c48"; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, y+60); ctx.stroke();
-    // housing
-    ctx.fillStyle = "#0a0713"; roundRect(x-9, y, 18, 44, 5); ctx.fill();
-    ctx.strokeStyle="rgba(123,47,214,0.5)"; ctx.lineWidth=1.5; roundRect(x-9,y,18,44,5); ctx.stroke();
-    const lamps = [["#ff4d6d", light==="red"], ["#ffd23d", false], ["#3dff9a", light==="green"]];
-    for (let i=0;i<3;i++){
-      const [col, on] = lamps[i]; const ly = y+8+i*14;
-      ctx.fillStyle = on ? col : hexA(col,0.16);
-      if (on){ ctx.shadowColor = col; ctx.shadowBlur = 12; }
-      ctx.beginPath(); ctx.arc(x, ly, 4.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+    const x = geo.laneX0 - 6, y = geo.lightY;
+    // ---- the Veilian mascot, holding up the stoplight ----
+    const ms = 2.6, bob = Math.sin(time*1.8)*1.6;          // mascot scale + idle bob
+    const hy = y + 62 + bob;                               // mascot head centre
+    const by = hy + 11*ms;                                 // body centre
+    const green = light === "green";
+    // legs
+    ctx.strokeStyle = "#2f8f6a"; ctx.lineWidth = 2.1*ms; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x-2.1*ms, by+5.2*ms); ctx.lineTo(x-3.1*ms, by+10.5*ms); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+2.1*ms, by+5.2*ms); ctx.lineTo(x+3.1*ms, by+10.5*ms); ctx.stroke();
+    // body
+    ctx.fillStyle = "#2f8f6a"; ctx.beginPath(); ctx.ellipse(x, by, 3.4*ms, 4.4*ms, 0,0,6.28); ctx.fill();
+    // arm raised to the housing, other arm at its side
+    ctx.strokeStyle = "#2f8f6a"; ctx.lineWidth = 1.9*ms;
+    ctx.beginPath(); ctx.moveTo(x-2.6*ms, by-1.6*ms); ctx.lineTo(x-4.6*ms, by+2.6*ms); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+2.2*ms, by-2.4*ms); ctx.quadraticCurveTo(x+3.4*ms, hy-4*ms, x+0.9*ms, y+46); ctx.stroke();
+    // head + antennae
+    ctx.fillStyle = "#3dbb86"; ctx.beginPath(); ctx.ellipse(x, hy, 4.3*ms, 4.7*ms, 0,0,6.28); ctx.fill();
+    ctx.strokeStyle = "#3dbb86"; ctx.lineWidth = 1*ms;
+    ctx.beginPath(); ctx.moveTo(x-1.5*ms, hy-4.2*ms); ctx.lineTo(x-2.6*ms, hy-7.6*ms); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+1.5*ms, hy-4.2*ms); ctx.lineTo(x+2.6*ms, hy-7.6*ms); ctx.stroke();
+    ctx.fillStyle = "#8ffff6"; ctx.shadowColor = "#8ffff6"; ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.arc(x-2.6*ms, hy-7.6*ms, 1*ms, 0,6.28); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+2.6*ms, hy-7.6*ms, 1*ms, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
+    // big almond eyes
+    ctx.fillStyle = "#05030c";
+    ctx.save(); ctx.translate(x-1.7*ms, hy); ctx.rotate(0.4);
+    ctx.beginPath(); ctx.ellipse(0,0, 1.05*ms, 2*ms, 0,0,6.28); ctx.fill(); ctx.restore();
+    ctx.save(); ctx.translate(x+1.7*ms, hy); ctx.rotate(-0.4);
+    ctx.beginPath(); ctx.ellipse(0,0, 1.05*ms, 2*ms, 0,0,6.28); ctx.fill(); ctx.restore();
+    // ---- the stoplight it holds up: red on top, green below ----
+    const hw = 26, hh = 52;
+    ctx.fillStyle = "#0a0713"; roundRect(x-hw/2, y, hw, hh, 7); ctx.fill();
+    ctx.strokeStyle = green ? "rgba(61,255,154,0.6)" : "rgba(255,77,109,0.55)";
+    ctx.lineWidth = 2; roundRect(x-hw/2, y, hw, hh, 7); ctx.stroke();
+    for (const [col, on, ly] of [["#ff4d6d", !green, y+15], ["#3dff9a", green, y+37]]){
+      ctx.fillStyle = on ? col : hexA(col, 0.14);
+      if (on){ ctx.shadowColor = col; ctx.shadowBlur = 18; }
+      ctx.beginPath(); ctx.arc(x, ly, 7.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+      if (on){ ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(x-2.2, ly-2.2, 2.2, 0, 6.28); ctx.fill(); }
     }
     // big green "Blockchain" sign (arrow above the word) at the head of the lane
     const sx = geo.laneC, sy = geo.gantryY - 8, sw = 112, sh = 46;
