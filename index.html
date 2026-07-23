@@ -228,8 +228,9 @@
     .stat { flex: 1 1 0; min-width: 0; padding: 5px 6px; text-align: center; }
     .stat-value { font-size: 12px; }
     .stat-label { font-size: 7px; letter-spacing: 0.8px; }
-    .right-stack { transform: scale(0.9); transform-origin: top right; }
-    .block-timer { padding: 8px 12px; min-width: 126px; }
+    .right-stack { transform: scale(0.92); transform-origin: top right; }
+    .block-timer { padding: 6px 9px; min-width: 0; }
+    .rb-title, .rb-legend { display: none; }     /* keep just the algorithm chips */
   }
 </style>
 </head>
@@ -372,12 +373,14 @@
   const canvas = document.getElementById("scene");
   const ctx = canvas.getContext("2d");
   let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+  let NARROW = false;            // phone-sized: keep only the essentials on screen
   const geo = {};
   const veilLogo = new Image(); veilLogo.src = "veil-mark.svg";   // real Veil mark, for the hull watermark
 
   function resize() {
     const r = canvas.parentElement.getBoundingClientRect();
     W = r.width; H = r.height;
+    NARROW = W < 700;
     canvas.width = W * DPR; canvas.height = H * DPR;
     canvas.style.width = W + "px"; canvas.style.height = H + "px";
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -420,13 +423,17 @@
     }
     // strange space trees lining the walkway, leaning inward to funnel Veilians toward the ship
     trees = [];
-    for (let ty = -20; ty < H + 70; ty += 92 + Math.random()*44){
-      for (const side of [0, 1]){
-        const x = side ? geo.roadX1 - 13 - Math.random()*9 : geo.roadX0 + 13 + Math.random()*9;
-        trees.push({ x, y: ty + (side ? 46 : 0), s: 0.8 + Math.random()*0.5,
-          hue: Math.random() < 0.5 ? "#3dffc4" : "#9a6cff",
-          ph: Math.random()*6.28, lean: (side ? -1 : 1) * (0.14 + Math.random()*0.13) });
-      }
+    // left edge: smaller and sparser, for depth
+    for (let ty = -20; ty < H + 80; ty += 116 + Math.random()*52){
+      trees.push({ x: geo.roadX0 + 12 + Math.random()*8, y: ty, s: 0.7 + Math.random()*0.35,
+        hue: Math.random() < 0.5 ? "#3dffc4" : "#9a6cff",
+        ph: Math.random()*6.28, lean: 0.14 + Math.random()*0.12 });
+    }
+    // right edge: a tall, dense tree line running the whole side
+    for (let ty = -50; ty < H + 100; ty += 58 + Math.random()*26){
+      trees.push({ x: geo.roadX1 - 6 + Math.random()*12, y: ty, s: 1.5 + Math.random()*0.85,
+        hue: Math.random() < 0.5 ? "#3dffc4" : "#9a6cff",
+        ph: Math.random()*6.28, lean: -(0.16 + Math.random()*0.14) });
     }
     stars = [];
     for (let i = 0; i < 190; i++) stars.push({ x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.4+0.3,
@@ -854,6 +861,7 @@
   // ambient shards drifting up the whole scene
   let ambient = [];
   function updateAmbient(dt){
+    if (NARROW){ if (ambient.length) ambient.length = 0; return; }   // no floating debris on phones
     if (ambient.length < 115 && Math.random() < dt*55){
       const rock = Math.random() < 0.5;
       ambient.push({ x: geo.roadX0 + Math.random()*(geo.laneX1-geo.roadX0), y: H+14,
@@ -892,11 +900,11 @@
       ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.28); ctx.fill();
     }
     ctx.globalAlpha = 1;
-    drawPlanets();
+    if (!NARROW) drawPlanets();
 
     drawSidewalk(time);
     drawRoad(time);
-    drawSpaceTrees(time);      // the tree-lined avenue guiding Veilians to the ship
+    if (!NARROW) drawSpaceTrees(time);   // tree-lined avenue (dropped on phones to cut clutter)
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
 
@@ -946,8 +954,8 @@
     ctx.shadowColor = "rgba(123,47,214,0.8)"; ctx.shadowBlur = 10;
     ctx.beginPath(); ctx.moveTo(geo.sidewalkX1, 0); ctx.lineTo(geo.sidewalkX1, H); ctx.stroke();
     ctx.shadowBlur = 0;
-    // hedges/clouds scrolling down
-    for (const h of hedges){
+    // drifting moons along the verge (dropped on phones to cut clutter)
+    for (const h of (NARROW ? [] : hedges)){
       let hy = ((h.y + scroll) % (H + 160)) - 40;
       drawHedge(h.x, hy, h.r, h.hue, h.puffs);
     }
