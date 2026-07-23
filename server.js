@@ -22,6 +22,7 @@
  */
 "use strict";
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 
@@ -40,7 +41,26 @@ const CFG = {
   rpcCookie: process.env.VEIL_RPC_COOKIE || fileCfg.rpcCookie || "",
   pollMs: +(process.env.POLL_MS || fileCfg.pollMs || 2500),
   mockBlockMs: +(process.env.MOCK_BLOCK_MS || fileCfg.mockBlockMs || 60000),
+  // VEIL→USD price for fee estimates. Pin VEIL_USD / config.veilUsd to override
+  // the auto price (CoinGecko id "veil"); coinId lets you point at another market.
+  veilUsd: +(process.env.VEIL_USD || fileCfg.veilUsd || 0),
+  coinId: process.env.VEIL_COIN_ID || fileCfg.coinId || "veil",
 };
+
+// ---------------------------------------------------------------------------
+// VEIL/USD price (for dollar fee estimates) — pinned, or polled from CoinGecko
+// ---------------------------------------------------------------------------
+let usdPrice = CFG.veilUsd;                 // 0 until known
+const priceAuto = !CFG.veilUsd;             // only auto-fetch when not pinned
+function fetchPrice() {
+  if (!priceAuto) return;
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(CFG.coinId)}&vs_currencies=usd`;
+  https.get(url, { headers: { accept: "application/json", "user-agent": "veilstreet/1.0" }, timeout: 8000 }, res => {
+    let d = ""; res.on("data", c => (d += c));
+    res.on("end", () => { try { const j = JSON.parse(d); const p = j[CFG.coinId] && j[CFG.coinId].usd; if (p > 0) usdPrice = p; } catch (_) {} });
+  }).on("error", () => {}).on("timeout", function () { this.destroy(); });
+}
+if (priceAuto) { fetchPrice(); setInterval(fetchPrice, 300000); }   // refresh every 5 min
 
 // ---------------------------------------------------------------------------
 // shared state: an append-only ring buffer of {seq, kind, ...} events
@@ -48,7 +68,7 @@ const CFG = {
 let seq = 0;
 const MAX_EVENTS = 3000;
 const events = [];
-let stats = { mode: "offline", network: "veil", height: 0, difficulty: 0, hashrate: 0, mempool: 0, updated: Date.now() };
+let stats = { mode: "offline", network: "veil", height: 0, difficulty: 0, hashrate: 0, mempool: 0, usd: 0, updated: Date.now() };
 
 function push(ev) {
   ev.seq = ++seq;
@@ -165,7 +185,7 @@ async function poll() {
       mode: "live", network: info.chain || "main", height,
       difficulty: info.difficulty || 0,
       hashrate: mining ? (mining.networkhashps || 0) : 0,
-      mempool: mem.size || 0, updated: Date.now(),
+      mempool: mem.size || 0, usd: usdPrice, updated: Date.now(),
     };
 
     // new blocks
@@ -203,7 +223,7 @@ async function poll() {
 function randHex(n) { let s = ""; const h = "0123456789abcdef"; for (let i = 0; i < n; i++) s += h[(Math.random() * 16) | 0]; return s; }
 function startMock() {
   let h = 3_200_000 + ((Math.random() * 5000) | 0);
-  stats = { mode: "live", network: "mock", height: h, difficulty: 230000, hashrate: 400e6, mempool: 0, updated: Date.now() };
+  stats = { mode: "live", network: "mock", height: h, difficulty: 230000, hashrate: 400e6, mempool: 0, usd: usdPrice || 0.0016, updated: Date.now() };
   setInterval(() => {
     stats.hashrate = Math.max(2e8, stats.hashrate + (Math.random() - 0.5) * 3e7);
     stats.difficulty = Math.max(1e5, stats.difficulty + (Math.random() - 0.5) * 8000);

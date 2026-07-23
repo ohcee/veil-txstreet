@@ -216,7 +216,7 @@
       <div class="stat"><div class="stat-label">Block Height</div><div class="stat-value" id="s-height">—</div></div>
       <div class="stat pos"><div class="stat-label">Mempool</div><div class="stat-value" id="s-mem">—</div></div>
       <div class="stat mag"><div class="stat-label">Privacy Ratio</div><div class="stat-value" id="s-priv">—</div></div>
-      <div class="stat pos"><div class="stat-label">Median Fee</div><div class="stat-value" id="s-price">—</div></div>
+      <div class="stat pos" title="Median transaction fee, estimated in USD from the live VEIL price"><div class="stat-label">Median Fee</div><div class="stat-value" id="s-price">—</div></div>
     </div>
   </nav>
 
@@ -539,7 +539,7 @@
            <div class="tx-hash">0x${short(tx.hash)}</div>
            <div class="tx-meta">${tx.addr ? short(tx.addr,6,4)+" · " : "shielded · "}<span class="tx-type-badge" style="background:${hexA(t.color,0.2)};color:${t.color}">${t.name}</span></div>
          </div>
-         <div class="tx-amt"><div class="tx-amt-val">${fmtSize(tx.vsize)}</div><div class="tx-amt-usd">${fmtFeeShort(tx.fee)}</div></div>
+         <div class="tx-amt"><div class="tx-amt-val">${fmtSize(tx.vsize)}</div><div class="tx-amt-usd">${fmtFee(tx.fee)}</div></div>
          <div class="tx-ext">↗</div>`;
       frag.appendChild(elx);
     }
@@ -547,6 +547,13 @@
   }
   function fmtSize(v){ return v>=1000 ? (v/1000).toFixed(2)+" kB" : Math.round(v)+" B"; }
   function fmtFeeShort(f){ if(!f) return "0"; return f>=0.001 ? f.toFixed(4)+" VEIL" : Math.round(f*1e6)+" µVEIL"; }
+  // compact USD, keeping ~2 significant figures for sub-cent values
+  function fmtUsd(v){ if(!v||v<=0) return "$0";
+    if(v>=0.01) return "$"+v.toFixed(2);
+    const dp = Math.min(11, 1 - Math.floor(Math.log10(v)));   // decimals for ~2 sig figs
+    return "$"+v.toFixed(dp); }
+  // fee in USD when a price is known, else fall back to µVEIL
+  function fmtFee(feeVeil){ const p = stat.usd||0; return p>0 ? fmtUsd(feeVeil*p) : fmtFeeShort(feeVeil); }
   function fmtHashrate(h){ const u=["H/s","kH/s","MH/s","GH/s","TH/s","PH/s"]; let i=0; while(h>=1000&&i<u.length-1){h/=1000;i++;} return h.toFixed(h<10?2:1)+" "+u[i]; }
   function fmtDiff(d){ if(d>=1e12)return(d/1e12).toFixed(2)+"T"; if(d>=1e9)return(d/1e9).toFixed(2)+"G"; if(d>=1e6)return(d/1e6).toFixed(2)+"M"; if(d>=1e3)return(d/1e3).toFixed(1)+"k"; return (d||0).toFixed(1); }
   function medianOf(a){ if(!a.length)return 0; const s=[...a].sort((x,y)=>x-y),m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
@@ -559,7 +566,7 @@
     height: 3_182_000 + ((Math.random()*4000)|0),
     hashrate: 3.4e8 + Math.random()*1.2e8,   // H/s (raw)
     difficulty: 2.1e5 + Math.random()*4e4,    // raw
-    mempool: 0, lastBlock: 0, network: "veil",
+    mempool: 0, lastBlock: 0, network: "veil", usd: 0,
     typeCount: { base: 0, stealth: 0, ringct: 0 },
   };
   const el = {
@@ -581,12 +588,12 @@
     el.mem.textContent = stat.mempool.toLocaleString() + " tx";
     el.priv.textContent = (privacyRatio()*100).toFixed(0) + "%";
     const mf = medianFee();
-    el.price.textContent = fmtFeeShort(mf);
+    el.price.textContent = fmtFee(mf);
     const c = stat.typeCount, tot = Math.max(1, c.base+c.stealth+c.ringct), segs = el.ratioBar.children;
     segs[0].style.flex = Math.max(0.4, c.base/tot*10);
     segs[1].style.flex = Math.max(0.4, c.stealth/tot*10);
     segs[2].style.flex = Math.max(0.4, c.ringct/tot*10);
-    el.spFee.textContent = fmtFeeShort(mf);
+    el.spFee.textContent = fmtFee(mf);
     el.spLast.textContent = Math.floor(stat.lastBlock) + "s ago";
     el.spBase.textContent = c.base.toLocaleString();
     el.spStealth.textContent = c.stealth.toLocaleString();
@@ -1264,6 +1271,7 @@
   function applyStats(s){
     if (!s) return;
     stat.network = s.network || stat.network;
+    if (typeof s.usd === "number"){ const had = stat.usd>0; stat.usd = s.usd; if (!had && stat.usd>0) renderTxList(); }   // re-price fees once known
     if (el.chainNet) el.chainNet.textContent = (s.network==="mock" ? "mock feed" : (s.network||"mainnet")) + " · privacy L1";
     if (feedMode === "live"){
       if (s.height) stat.height = s.height;
