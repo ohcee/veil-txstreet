@@ -320,6 +320,7 @@
   const ctx = canvas.getContext("2d");
   let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
   const geo = {};
+  const veilLogo = new Image(); veilLogo.src = "veil-mark.svg";   // real Veil mark, for the hull watermark
 
   function resize() {
     const r = canvas.parentElement.getBoundingClientRect();
@@ -902,17 +903,13 @@
       ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-1, sy-1, 1, 0, 6.28); ctx.fill();
     }
 
-    // large faded Veil logo watermarked on the hull (like a coin on the block car)
-    const cy = y+h*0.54, rr = w*0.34;
-    ctx.save(); ctx.globalAlpha = b.alpha;
-    ctx.beginPath();
-    for (let i=0;i<6;i++){ const a=-Math.PI/2+i*Math.PI/3, px=cx+Math.cos(a)*rr, py=cy+Math.sin(a)*rr; i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
-    ctx.closePath();
-    ctx.fillStyle = hexA(oc, 0.09); ctx.fill();
-    ctx.strokeStyle = hexA(oc, 0.30); ctx.lineWidth = 2; ctx.stroke();
-    ctx.strokeStyle = hexA("#eafffb", 0.22); ctx.lineWidth = 3.4; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(cx-rr*0.6, cy-rr*0.34); ctx.quadraticCurveTo(cx, cy+rr*0.55, cx+rr*0.6, cy-rr*0.34); ctx.stroke();
-    ctx.restore();
+    // the real Veil logo, faded, watermarked on the hull (like a coin on the block car)
+    if (veilLogo.complete && veilLogo.naturalWidth){
+      const ls = Math.min(w*0.58, h*0.30);
+      ctx.save(); ctx.globalAlpha = b.alpha * 0.30;
+      ctx.drawImage(veilLogo, cx - ls/2, y + h*0.50 - ls/2, ls, ls);
+      ctx.restore();
+    }
 
     // algorithm badge (once mined)
     if (b.algo){
