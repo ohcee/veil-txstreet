@@ -111,6 +111,21 @@ function classify(tx) {
 }
 function heuristicType(vsize) { return vsize > 2200 ? "ringct" : vsize > 900 ? "stealth" : "base"; }
 
+// Which of Veil's algorithms mined a block: pos | progpow | randomx | sha256d | unknown.
+// Field names vary by node version, so probe several; refine once confirmed against a node.
+function detectAlgo(blk) {
+  const flags = String(blk.flags || "").toLowerCase();
+  if (flags.includes("stake") || blk.proofofstakehash || blk.posproofhash || blk.is_pos || blk.proof_of_stake) return "pos";
+  const a = String(blk.algo || blk.pow_algo || blk.proof_algo || blk.powalgo || blk.proof_type || blk.mining_algo || "").toLowerCase();
+  if (a.includes("progpow")) return "progpow";
+  if (a.includes("randomx")) return "randomx";
+  if (a.includes("sha256")) return "sha256d";
+  if (a.includes("stake") || a.includes("pos")) return "pos";
+  return "unknown";
+}
+function mockAlgo() { const w = { pos:0.50, progpow:0.32, randomx:0.10, sha256d:0.08 }; let r = Math.random();
+  for (const k of ["pos","progpow","randomx","sha256d"]) { r -= w[k]; if (r <= 0) return k; } return "progpow"; }
+
 // classification queue (limits concurrent getrawtransaction calls)
 const txQ = [];
 let inflight = 0;
@@ -159,7 +174,7 @@ async function poll() {
         try {
           const hash = await rpc("getblockhash", [h]);
           const blk = await rpc("getblock", [hash]);
-          push({ kind: "block", height: h, hash, txcount: (blk.tx || []).length, size: blk.size || 0, time: blk.time || Date.now() / 1000 });
+          push({ kind: "block", height: h, hash, txcount: (blk.tx || []).length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000 });
           for (const tid of (blk.tx || [])) known.delete(tid);
         } catch (_) {}
       }
@@ -204,7 +219,7 @@ function startMock() {
   }, 550);
   setInterval(() => {
     h++; const txcount = 6 + ((Math.random() * 45) | 0);
-    push({ kind: "block", height: h, hash: randHex(64), txcount, size: txcount * 1600, time: Date.now() / 1000 });
+    push({ kind: "block", height: h, hash: randHex(64), txcount, size: txcount * 1600, algo: mockAlgo(), time: Date.now() / 1000 });
     stats.height = h; stats.mempool = Math.max(0, stats.mempool - txcount);
   }, CFG.mockBlockMs);
 }

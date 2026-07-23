@@ -108,6 +108,13 @@
   .bt-sub { font-size: 9px; color: var(--text-dim); letter-spacing: 0.5px; }
   .bt-bar { height: 4px; background: rgba(123,47,214,0.25); border-radius: 3px; margin-top: 7px; overflow: hidden; }
   .bt-fill { height: 100%; background: linear-gradient(90deg, var(--veil-purple-bright), var(--veil-cyan)); border-radius: 3px; width: 0%; }
+  .rb-title { font-size: 8px; letter-spacing: 1.6px; color: var(--text-faint); text-transform: uppercase; margin: 11px 0 6px; }
+  .rb-chips { display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; min-height: 12px; }
+  .rb-chip { width: 12px; height: 12px; border-radius: 3px; box-shadow: 0 0 6px currentColor; animation: rbin 0.35s ease; }
+  @keyframes rbin { from { transform: scale(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
+  .rb-legend { display: flex; flex-wrap: wrap; gap: 4px 9px; justify-content: center; margin-top: 8px; }
+  .rb-legend span { display: flex; align-items: center; gap: 4px; font-size: 8px; letter-spacing: 0.4px; color: var(--text-dim); }
+  .rb-legend i { width: 8px; height: 8px; border-radius: 2px; }
 
   .stats-chip {
     position: absolute; left: 16px; bottom: 40px; z-index: 6;
@@ -231,6 +238,14 @@
       <div class="bt-value" id="bt-value">60</div>
       <div class="bt-sub" id="bt-sub">0 tx boarding</div>
       <div class="bt-bar"><div class="bt-fill" id="bt-fill"></div></div>
+      <div class="rb-title">Recent blocks · algorithm</div>
+      <div class="rb-chips" id="rbChips"></div>
+      <div class="rb-legend">
+        <span><i style="background:#3dff9a"></i>PoS</span>
+        <span><i style="background:#4da3ff"></i>ProgPoW</span>
+        <span><i style="background:#ffab3d"></i>RandomX</span>
+        <span><i style="background:#ff5d7a"></i>SHA256d</span>
+      </div>
     </div>
 
     <div class="stats-pop" id="statsPop">
@@ -240,7 +255,7 @@
       <div class="legend-row"><span class="legend-swatch" style="background:#d64bff"></span> RingCT — fully shielded</div>
       <div class="legend-row" style="margin:6px 0 12px;color:#6b628f;font-size:9px">Size = amount · Speed = fee priority</div>
       <div class="sp-title">Network Detail</div>
-      <div class="sp-row">Consensus <b>PoW X16RT + PoS</b></div>
+      <div class="sp-row">Consensus <b>3 PoW algos + PoS</b></div>
       <div class="sp-row">Block time <b>~60 s</b></div>
       <div class="sp-row">Median fee <b id="sp-fee">—</b></div>
       <div class="sp-row">Last block <b id="sp-last">—</b></div>
@@ -302,6 +317,17 @@
   const explorerTx = (hash) => `${EXPLORER}/tx/${hash}`;
   const explorerBlocks = () => `${EXPLORER}/blocks`;
   const openExt = (url) => window.open(url, "_blank", "noopener");
+
+  // Veil is multi-algorithm: three PoW algos + Proof-of-Stake. Blocks are coloured by miner.
+  const ALGOS = {
+    pos:     { key:"pos",     name:"PoS · Stake", label:"STAKE",   color:"#3dff9a", weight:0.50 },
+    progpow: { key:"progpow", name:"ProgPoW",     label:"PROGPOW", color:"#4da3ff", weight:0.32 },
+    randomx: { key:"randomx", name:"RandomX",     label:"RANDOMX", color:"#ffab3d", weight:0.10 },
+    sha256d: { key:"sha256d", name:"SHA256d",     label:"SHA256D", color:"#ff5d7a", weight:0.08 },
+    unknown: { key:"unknown", name:"Veil Block",  label:"VEIL",    color:"#9b6cff", weight:0 },
+  };
+  function algoOf(k){ return ALGOS[k] || ALGOS.unknown; }
+  function pickAlgo(){ let r = Math.random(); for (const k of ["pos","progpow","randomx","sha256d"]){ r -= ALGOS[k].weight; if (r <= 0) return k; } return "progpow"; }
 
   const canvas = document.getElementById("scene");
   const ctx = canvas.getContext("2d");
@@ -375,12 +401,14 @@
 
   function mineBlock(block) {
     const lead = buses.find(b => b.state === "waiting") || buses[0];
+    const algo = (block && block.algo) ? block.algo : pickAlgo();   // real when live, weighted when sim
     if (!LIVE) {                                   // sim advances its own chain
       stat.height += 1;
       stat.difficulty = Math.max(1e5, stat.difficulty + (Math.random() - 0.48) * 4000);
     }
-    stat.lastBlock = 0;
+    stat.lastBlock = 0; stat.lastAlgo = algo;
     if (lead) {
+      lead.algo = algo;
       if (block) { lead.blockHeight = block.height; lead.blockHash = block.hash; lead.blockTxcount = block.txcount; }
       lead.state = "leaving"; lead.vy = 1.4;
       for (const c of lead.passengers) c.state = "riding";
@@ -389,9 +417,22 @@
     // next block bus materializes from the top of the lane
     buses.push(makeBus(true));
     blockClock = BLOCK_TIME;
-    flash = 1;
+    flash = 1; flashColor = algoOf(algo).color;
+    pushRecentBlock({ height: (block ? block.height : stat.height), algo });
   }
-  let flash = 0;
+  let flash = 0, flashColor = "#3dff9a";
+  // recent blocks strip (coloured by mining algorithm)
+  let recentBlocks = [];
+  function pushRecentBlock(b){ recentBlocks.unshift(b); if (recentBlocks.length > 14) recentBlocks.pop(); renderRecentBlocks(); }
+  function renderRecentBlocks(){
+    const host = document.getElementById("rbChips"); if (!host) return;
+    const frag = document.createDocumentFragment();
+    for (const b of recentBlocks){ const a = algoOf(b.algo);
+      const c = document.createElement("div"); c.className = "rb-chip"; c.style.background = a.color;
+      c.title = a.name + (b.height ? " · #" + b.height.toLocaleString() : "");
+      frag.appendChild(c); }
+    host.replaceChildren(frag);
+  }
 
   // ---------------------------------------------------------------------------
   // People (transactions)
@@ -436,12 +477,20 @@
   // ---------------------------------------------------------------------------
   const HEX = "0123456789abcdef";
   function rndHex(n){ let s=""; for(let i=0;i<n;i++) s+=HEX[(Math.random()*16)|0]; return s; }
+  // Veil mainnet address prefixes: stealth = "sv" (base58), basecoin bech32 = "bv1".
+  // (Only used for the sidebar's display flavor — mempool txs don't expose recipients.)
+  const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  const B32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+  function rndFrom(set,n){ let s=""; for(let i=0;i<n;i++) s+=set[(Math.random()*set.length)|0]; return s; }
+  function fauxAddr(typeKey){
+    if (typeKey === "ringct") return "";                          // fully shielded — no address
+    return typeKey === "stealth" ? "sv" + rndFrom(B58, 12) : "bv1" + rndFrom(B32, 12);
+  }
   let txSeq = 0;
   function makeTxFromData(d) {
     txSeq++;
     const typeKey = (d.type in TX_TYPES) ? d.type : "base";
-    const addr = d.addr != null ? d.addr
-      : (typeKey === "ringct" ? "" : (typeKey === "stealth" ? "sv1" + rndHex(10) : "VeIL" + rndHex(9)));
+    const addr = d.addr != null ? d.addr : fauxAddr(typeKey);
     return { id: txSeq, hash: d.hash || rndHex(64), type: typeKey, typeName: TX_TYPES[typeKey].name,
       vsize: d.vsize || 500, fee: d.fee || 0, addr, t: Date.now() };
   }
@@ -645,9 +694,16 @@
 
     // background
     const g = ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,"#0a0518"); g.addColorStop(0.5,"#0c0720"); g.addColorStop(1,"#080513");
+    g.addColorStop(0,"#160b34"); g.addColorStop(0.5,"#140d2e"); g.addColorStop(1,"#0e0922");
     ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
-    for (const s of stars){ ctx.globalAlpha = 0.25 + Math.sin(time*2+s.tw)*0.2; ctx.fillStyle="#cfe9ff";
+    // soft overhead wash + side aurora to lift the scene
+    const wash = ctx.createRadialGradient(W*0.5, -H*0.15, 20, W*0.5, -H*0.15, H*1.15);
+    wash.addColorStop(0,"rgba(126,72,205,0.34)"); wash.addColorStop(1,"rgba(126,72,205,0)");
+    ctx.fillStyle = wash; ctx.fillRect(0,0,W,H);
+    const aur = ctx.createRadialGradient(W*0.85, H*0.2, 20, W*0.85, H*0.2, H*0.7);
+    aur.addColorStop(0,"rgba(34,224,214,0.10)"); aur.addColorStop(1,"rgba(34,224,214,0)");
+    ctx.fillStyle = aur; ctx.fillRect(0,0,W,H);
+    for (const s of stars){ ctx.globalAlpha = 0.4 + Math.sin(time*2+s.tw)*0.25; ctx.fillStyle="#e6f0ff";
       ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.28); ctx.fill(); }
     ctx.globalAlpha = 1;
 
@@ -670,10 +726,10 @@
     drawGantry(time);
     drawStoplight(time);
 
-    if (flash > 0){ ctx.fillStyle = `rgba(61,255,154,${flash*0.12})`; ctx.fillRect(0,0,W,H); }
+    if (flash > 0){ ctx.fillStyle = hexA(flashColor, flash*0.14); ctx.fillRect(0,0,W,H); }
     // vignette
-    const vg = ctx.createRadialGradient(W/2,H/2,H*0.35,W/2,H/2,H*0.85);
-    vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.5)");
+    const vg = ctx.createRadialGradient(W/2,H/2,H*0.5,W/2,H/2,H*0.98);
+    vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,0.3)");
     ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
   }
 
@@ -711,15 +767,15 @@
   function drawRoad(time){
     // asphalt
     const rg = ctx.createLinearGradient(geo.roadX0,0,geo.roadX1,0);
-    rg.addColorStop(0,"#1a1330"); rg.addColorStop(0.5,"#141026"); rg.addColorStop(1,"#1a1330");
+    rg.addColorStop(0,"#2c2152"); rg.addColorStop(0.5,"#241a44"); rg.addColorStop(1,"#2c2152");
     ctx.fillStyle = rg; ctx.fillRect(geo.roadX0, 0, geo.roadX1-geo.roadX0, H);
-    // faint scrolling checker
+    // scrolling checker
     const cell = 34, off = (scroll % cell);
-    ctx.globalAlpha = 0.05;
+    ctx.globalAlpha = 0.10;
     for (let yy = -cell + off; yy < H; yy += cell){
       for (let xx = geo.roadX0; xx < geo.roadX1; xx += cell){
         if ((Math.floor(xx/cell) + Math.floor((yy-off)/cell)) % 2 === 0){
-          ctx.fillStyle = "#7b2fd6"; ctx.fillRect(xx, yy, cell, cell);
+          ctx.fillStyle = "#9a63ff"; ctx.fillRect(xx, yy, cell, cell);
         }
       }
     }
@@ -737,7 +793,7 @@
 
   function drawLane(time){
     const lg = ctx.createLinearGradient(geo.laneX0,0,geo.laneX1,0);
-    lg.addColorStop(0,"#120c22"); lg.addColorStop(1,"#0e0a1c");
+    lg.addColorStop(0,"#1e1642"); lg.addColorStop(1,"#191136");
     ctx.fillStyle = lg; ctx.fillRect(geo.laneX0, 0, geo.laneX1-geo.laneX0, H);
     // center dashes moving up (blockchain direction)
     ctx.strokeStyle = "rgba(61,255,154,0.4)"; ctx.lineWidth = 3; ctx.setLineDash([16,20]);
@@ -755,7 +811,8 @@
     const y = b.y + (b.state==="waiting" ? Math.sin(time*2)*1.4 : 0);   // idle bob
     const isLead = b.state==="waiting" || b.state==="arriving";
     const braking = b.state==="leaving";
-    const oc = b.state==="waiting" ? "#3dff9a" : braking ? "#ff9a5a" : "#7b2fd6";
+    // a mined block departs in its algorithm's colour; the collecting bus stays neutral green
+    const oc = braking ? algoOf(b.algo).color : b.state==="waiting" ? "#3dff9a" : "#7b2fd6";
     ctx.save();
     ctx.globalAlpha = b.alpha;
 
@@ -807,6 +864,17 @@
     ctx.closePath(); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x-rr*0.6,cy-rr*0.1); ctx.quadraticCurveTo(x,cy+rr*0.55,x+rr*0.6,cy-rr*0.1); ctx.stroke();
     ctx.shadowBlur = 0;
+
+    // algorithm badge (only once the block is mined / departing)
+    if (b.algo){
+      const a = algoOf(b.algo);
+      ctx.font = "800 8px ui-monospace, monospace"; ctx.textAlign = "center";
+      const pw = ctx.measureText(a.label).width + 14, px = x - pw/2, py = y + h*0.33;
+      ctx.fillStyle = hexA(a.color, 0.2); ctx.strokeStyle = a.color; ctx.lineWidth = 1.2;
+      ctx.shadowColor = a.color; ctx.shadowBlur = 8;
+      roundRect(px, py, pw, 14, 7); ctx.fill(); ctx.shadowBlur = 0; roundRect(px, py, pw, 14, 7); ctx.stroke();
+      ctx.fillStyle = a.color; ctx.fillText(a.label, x, py + 10);
+    }
 
     // labels
     const bh = b.blockHeight!=null ? b.blockHeight : stat.height+1;
