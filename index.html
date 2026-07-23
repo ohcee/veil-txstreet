@@ -395,8 +395,11 @@
     geo.bBarY0 = geo.mergeY0 - H * 0.075;  // mirrored bar at the foot, same depth as the top bar
     geo.bBarY1 = geo.mergeY0 + H * 0.045;
     // the coinbase mine, dug into the lower bushes, with a shaft up to the bottom bar
-    geo.mineX = geo.roadX0 + rw * 0.21;
-    geo.mineY = geo.bBarY1 + H * 0.15;
+    geo.mineX = geo.roadX0 + rw * 0.22;
+    geo.mineY = geo.bBarY1 + H * 0.17;
+    // a second way in: a teleport gate on the open walkway near the bottom
+    geo.gateX = geo.roadX0 + rw * 0.84;
+    geo.gateY = H * 0.80;
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -411,7 +414,7 @@
     if (y > geo.tBarY0 - pad && y < geo.tBarY1 + pad) return true;                      // top bar
     if (y > geo.bBarY0 - pad && y < geo.bBarY1 + pad) return true;                      // mirrored bottom bar
     if (y >= geo.tBarY1 && y <= geo.bBarY0 && Math.abs(x - geo.tStemC) < geo.tStemW/2 + pad) return true;  // stem joining them
-    if (y >= geo.bBarY1 - pad && y <= geo.mineY + 22 && Math.abs(x - geo.mineX) < 28) return true;         // shaft up from the mine
+    if (y >= geo.bBarY1 - pad && y <= geo.mineY + 36 && Math.abs(x - geo.mineX) < 46) return true;         // shaft up from the mine
     return false;
   }
   let scroll = 0;                 // world scroll for belt texture + drifting moons
@@ -495,10 +498,13 @@
   }
   // the coinbase mine dug into the lower bushes — where the block's miner climbs out
   function drawMine(time){
-    const mx = geo.mineX, my = geo.mineY, w = 34, h = 30;
+    const mx = geo.mineX, my = geo.mineY, w = 62, h = 52;
     // spoil heap around the mouth
     ctx.fillStyle = "#2b2440";
-    ctx.beginPath(); ctx.ellipse(mx, my + h*0.55, w*0.95, 9, 0, 0, 6.28); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(mx, my + h*0.55, w*0.95, 14, 0, 0, 6.28); ctx.fill();
+    ctx.fillStyle = "#241e38";
+    ctx.beginPath(); ctx.ellipse(mx - w*0.55, my + h*0.5, w*0.3, 8, 0, 0, 6.28); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(mx + w*0.55, my + h*0.5, w*0.3, 8, 0, 0, 6.28); ctx.fill();
     // shaft opening
     ctx.fillStyle = "#070510";
     ctx.beginPath();
@@ -511,15 +517,58 @@
     gg.addColorStop(0, "rgba(255,207,90,0.32)"); gg.addColorStop(1, "rgba(255,207,90,0)");
     ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(mx, my, w, h*0.85, 0, 0, 6.28); ctx.fill();
     // timber frame
-    ctx.strokeStyle = "#8a734a"; ctx.lineWidth = 4; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(mx - w/2 - 2, my + h/2); ctx.lineTo(mx - w/2 - 2, my - h/2 + 4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(mx + w/2 + 2, my + h/2); ctx.lineTo(mx + w/2 + 2, my - h/2 + 4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(mx - w/2 - 5, my - h/2 + 3); ctx.lineTo(mx + w/2 + 5, my - h/2 + 3); ctx.stroke();
+    ctx.strokeStyle = "#8a734a"; ctx.lineWidth = 6; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(mx - w/2 - 3, my + h/2); ctx.lineTo(mx - w/2 - 3, my - h/2 + 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx + w/2 + 3, my + h/2); ctx.lineTo(mx + w/2 + 3, my - h/2 + 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx - w/2 - 7, my - h/2 + 4); ctx.lineTo(mx + w/2 + 7, my - h/2 + 4); ctx.stroke();
+    ctx.strokeStyle = "#6d5a3a"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(mx - w/2 - 3, my - h*0.12); ctx.lineTo(mx + w/2 + 3, my - h*0.12); ctx.stroke();
     // lantern over the entrance
     const flick = 0.75 + Math.sin(time*7)*0.2;
     ctx.fillStyle = `rgba(255,214,120,${flick.toFixed(2)})`;
     ctx.shadowColor = "#ffd678"; ctx.shadowBlur = 12;
-    ctx.beginPath(); ctx.arc(mx, my - h/2 - 3, 3.2, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.beginPath(); ctx.arc(mx, my - h/2 - 5, 4.6, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+  }
+  // the lower teleport gate — a second way onto the walkway
+  function drawGate(time){
+    const gx = geo.gateX, gy = geo.gateY, w = 46, h = 16;
+    const pulse = 0.5 + 0.5*Math.sin(time*2.2);
+    const gg = ctx.createRadialGradient(gx, gy, 2, gx, gy, w);
+    gg.addColorStop(0, `rgba(61,255,154,${(0.22+pulse*0.14).toFixed(3)})`);
+    gg.addColorStop(1, "rgba(61,255,154,0)");
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(gx, gy, w, h*1.6, 0,0,6.28); ctx.fill();
+    // beam rising off the pad
+    const bg = ctx.createLinearGradient(gx, gy - 96, gx, gy);
+    bg.addColorStop(0, "rgba(61,255,154,0)");
+    bg.addColorStop(1, `rgba(61,255,154,${(0.13+pulse*0.07).toFixed(3)})`);
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.moveTo(gx - w*0.18, gy - 96); ctx.lineTo(gx + w*0.18, gy - 96);
+    ctx.lineTo(gx + w*0.5, gy); ctx.lineTo(gx - w*0.5, gy); ctx.closePath(); ctx.fill();
+    // pad
+    ctx.fillStyle = "rgba(14,30,26,0.85)";
+    ctx.beginPath(); ctx.ellipse(gx, gy, w*0.55, h*0.55, 0,0,6.28); ctx.fill();
+    ctx.strokeStyle = `rgba(61,255,154,${(0.55+pulse*0.35).toFixed(3)})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(gx, gy, w*0.55, h*0.55, 0,0,6.28); ctx.stroke();
+    ctx.strokeStyle = `rgba(61,255,154,${(0.22+pulse*0.18).toFixed(3)})`; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.ellipse(gx, gy, w*0.82, h*0.82, 0,0,6.28); ctx.stroke();
+  }
+  // lit boarding stairs from the corridor across to the ship
+  function drawStairs(time){
+    const x0 = geo.roadX1 - 4, y0 = geo.mergeY0 + 4;
+    const x1 = geo.laneC - 10, y1 = geo.boardY + 2;
+    const n = 7, dx = (x1-x0)/n, dy = (y1-y0)/n, tw = Math.abs(dx) + 11;
+    for (let i = 0; i < n; i++){
+      const sx = x0 + dx*i, sy = y0 + dy*i;
+      const glow = 0.22 + 0.10*Math.sin(time*3 - i*0.6);
+      ctx.fillStyle = `rgba(150,190,255,${glow.toFixed(3)})`;
+      roundRect(sx, sy, tw, 8, 2); ctx.fill();
+      ctx.strokeStyle = "rgba(175,215,255,0.55)"; ctx.lineWidth = 1.2;
+      roundRect(sx, sy, tw, 8, 2); ctx.stroke();
+    }
+    ctx.strokeStyle = "rgba(61,255,154,0.55)"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x0, y0 - 7); ctx.lineTo(x1, y1 - 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x0, y0 + 15); ctx.lineTo(x1, y1 + 15); ctx.stroke();
   }
   // strange bioluminescent space trees lining the walkway
   function drawSpaceTrees(time){ for (const t of trees) drawSpaceTree(t, time); }
@@ -615,7 +664,7 @@
     people.push({
       tx: { type: "base", vsize: 300, fee: 0, hash: "" },
       type: TX_TYPES.base, size: 1.12, speed: 50 + Math.random()*22, spawnX,
-      x: spawnX, y: geo.mineY + 4, tp: 0, fromMine: true,
+      x: spawnX, y: geo.mineY + 4, tp: 0, climbing: true, climbX: geo.mineX,
       phase: Math.random()*6.28, sway: Math.random()*6.28,
       state: "walking", boards: true, miner: true,
       cloakGoal: 0.4, cloak: 0, shards: [], targetBus: null, seat: 0,
@@ -665,16 +714,22 @@
   // core factory — used by both the simulation and the live feed
   function addPerson(d) {
     const type = TX_TYPES[(d.type in TX_TYPES) ? d.type : "base"];
-    const spawnX = geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20);   // land along the T's top bar
+    // most Veilians teleport onto the T's top bar; some arrive at the lower gate and walk up
+    const viaGate = d.atY == null && Math.random() < 0.3;
+    const spawnX = viaGate ? geo.gateX + (Math.random()-0.5)*18
+                           : geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20);
     const tx = makeTxFromData(d);
     const size = sizeFromVsize(tx.vsize);
     const feePriority = Math.min(1, (tx.fee || 0) / 0.0004);
     const speed = 42 + feePriority * 120 + Math.random() * 20;   // px/sec downward
     const p = {
       tx, type, size, speed, spawnX,
-      x: spawnX, y: d.atY == null ? geo.tBarY0 + Math.random() * (geo.tBarY1 - geo.tBarY0) : d.atY,
+      x: spawnX,
+      y: d.atY != null ? d.atY
+         : viaGate ? geo.gateY + (Math.random()-0.5)*10
+                   : geo.tBarY0 + Math.random() * (geo.tBarY1 - geo.tBarY0),
       tp: d.atY == null ? 1 : 0,                                // 1 = teleporting in
-
+      climbing: viaGate, climbX: geo.gateX,
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
       state: "walking", boards: Math.random() < 0.92,
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
@@ -871,11 +926,11 @@
       if (p.state === "walking") {
         // materialise first, then start walking the avenue
         if (p.tp > 0) p.tp = Math.max(0, p.tp - dt * 1.7);
-        if (p.fromMine) {
-          // the coinbase climbs up the shaft, then joins the corridor to the ship
-          p.y -= p.speed * dt * 0.85;
-          p.x += (geo.mineX - p.x) * Math.min(1, dt * 2);
-          if (p.y <= geo.mergeY0 - 6){ p.fromMine = false; p.spawnX = p.x; }
+        if (p.climbing) {
+          // came up out of the mine (or the lower gate), then joins the corridor to the ship
+          p.y -= p.speed * dt * 0.9;
+          p.x += (p.climbX - p.x) * Math.min(1, dt * 2);
+          if (p.y <= geo.mergeY0 + 6){ p.climbing = false; p.spawnX = p.x; }
         }
         else if (!(p.tp > 0.45)) p.y += p.speed * dt;
         // veil shard emission for shielded
@@ -968,6 +1023,8 @@
     if (!NARROW){ drawBushes(time); drawMine(time); drawSpaceTrees(time); }   // bush field, mine + tree line
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
+    drawStairs(time);          // boarding stairs from the corridor up to the ship
+    drawGate(time);            // lower teleport gate — the second way in
 
     // ambient space debris behind actors: shards + drifting asteroids
     for (const p of ambient){
