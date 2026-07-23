@@ -189,7 +189,8 @@ async function poll() {
 
     // first poll: learn the tip block time so "time since block" survives a refresh
     if (lastHeight === null) {
-      try { const th = await rpc("getblockhash", [height]); const tb = await rpc("getblock", [th]); tipTime = tb.time || tipTime; } catch (_) {}
+      try { const th = await rpc("getblockhash", [height]); const tb = await rpc("getblock", [th]);
+             const nowSec = Date.now()/1000; tipTime = Math.min(tb.time || nowSec, nowSec); } catch (_) {}
     }
 
     // new blocks
@@ -202,12 +203,19 @@ async function poll() {
           const txs = blk.tx || [];
           // txids let the UI group the feed's transactions under the block that confirmed them
           const txids = txs.slice(0, 60).map(t => (full ? (t.txid || t) : t));
-          tipTime = blk.time || tipTime;
+          // anchor to when we SAW the block, not its self-reported timestamp: Veil stamps
+          // can sit in the future (pinning the clock at 0) or lag arrival by ~a minute
+          // (so it would never appear to reset). Arrival matches the ship launching.
+          tipTime = Date.now() / 1000;
           // surface confirmed txs we never saw in the mempool, so the feed matches the explorer.
           // these go out BEFORE the block event, so the block can group them on arrival.
+          // idx 0 is the coinbase; on a PoS block idx 1 is the coinstake (the staking
+          // reward). Both are block-reward machinery, not user traffic, so neither
+          // should walk the street — the astronaut represents them.
+          const rewardTxs = detectAlgo(blk) === "pos" ? 2 : 1;
           txs.forEach((tx, idx) => {
             const tid = full ? (tx.txid || tx) : tx;
-            if (idx > 0 && !known.has(tid)) {                 // idx 0 is the coinbase (shown as the astronaut)
+            if (idx >= rewardTxs && !known.has(tid)) {
               if (full) push({ kind: "tx", txid: tid, vsize: tx.vsize || tx.size || 500, fee: 0, type: classify(tx), time: blk.time || Date.now() / 1000 });
               else push({ kind: "tx", txid: tid, vsize: 800, fee: 0, type: heuristicType(800), time: blk.time || Date.now() / 1000 });
             }
@@ -224,7 +232,6 @@ async function poll() {
       difficulty: info.difficulty || 0,
       hashrate: mining ? (mining.networkhashps || 0) : 0,
       mempool: mem.size || 0, usd: usdPrice,
-      sinceBlock: tipTime ? Math.max(0, Date.now() / 1000 - tipTime) : 0,
       updated: Date.now(),
     };
 
@@ -283,7 +290,9 @@ const server = http.createServer((req, res) => {
   const u = new URL(req.url, "http://localhost");
   if (u.pathname === "/api/state") {
     const from = +(u.searchParams.get("since") || -1);
-    const payload = { mode: stats.mode, seq, stats, events: from < 0 ? [] : since(from) };
+    // computed per request so the clock advances smoothly instead of in 2.5s steps
+    const liveStats = { ...stats, sinceBlock: tipTime ? Math.max(0, Date.now() / 1000 - tipTime) : 0 };
+    const payload = { mode: stats.mode, seq, stats: liveStats, events: from < 0 ? [] : since(from) };
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
     res.end(JSON.stringify(payload));
     return;

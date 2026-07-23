@@ -630,9 +630,12 @@
       // every block has a coinbase: make sure its miner is aboard before takeoff.
       // if one is still walking, snap it into this ship (it made it just in time).
       if (!lead.hasPilot) {
-        const m = people.find(p => p.miner && p.state !== "gone");
-        if (m) { m.state = "riding"; m.targetBus = lead; if (!lead.passengers.includes(m)) lead.passengers.push(m); }
+        // the block always has a coinbase, so the departing ship shows its pilot...
         lead.hasPilot = true;
+        // ...but only pull a miner aboard if it actually made it to the final approach.
+        // one still climbing out of the mine keeps walking and catches a later ship.
+        const m = people.find(p => p.miner && p.state === "walking" && !p.climbing && p.y > geo.mergeY0);
+        if (m) { m.state = "riding"; m.targetBus = lead; if (!lead.passengers.includes(m)) lead.passengers.push(m); }
       }
       lead.state = "leaving"; lead.vy = -1.4;   // drive up toward the Blockchain sign
       for (const c of lead.passengers) c.state = "riding";
@@ -1689,7 +1692,10 @@
       if (typeof s.mempool === "number") stat.mempool = s.mempool;
       // anchor the "time since last block" to the node on every poll so it can't drift
       // (it still ticks locally between polls for a smooth count)
-      if (typeof s.sinceBlock === "number") stat.lastBlock = s.sinceBlock;
+      // re-anchor to the node only when it meaningfully disagrees (a reset or real drift),
+      // otherwise keep counting locally so the display never stutters or ticks backwards
+      if (typeof s.sinceBlock === "number" && Math.abs(s.sinceBlock - stat.lastBlock) > 1.5)
+        stat.lastBlock = s.sinceBlock;
     }
   }
   function onLiveTx(ev){
