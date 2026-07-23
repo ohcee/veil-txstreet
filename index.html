@@ -972,13 +972,15 @@
           p.x += (geo.tStemC - p.x) * Math.min(1, dt * 1.8);
           p.spawnX = p.x;                       // the later lane merge starts from here
         }
-        // merge toward lane if boarding
-        if (p.boards && boardingBus && p.y > geo.mergeY0) {
+        // merge toward lane if boarding. climbers start out BELOW the boarding line
+        // (mine and gate are near the bottom), so they must finish climbing first —
+        // otherwise they'd merge and board on their very first frame.
+        if (!p.climbing && p.boards && boardingBus && p.y > geo.mergeY0) {
           const f = ease(Math.min(1, (p.y - geo.mergeY0) / (geo.boardY - geo.mergeY0)));
           p.x = p.spawnX + (geo.laneC - p.spawnX) * f;
         }
         // board
-        if (p.boards && boardingBus && p.y >= geo.boardY && boardingBus.passengers.length < 240) {
+        if (!p.climbing && p.boards && boardingBus && p.y >= geo.boardY && boardingBus.passengers.length < 240) {
           p.state = "boarded"; p.targetBus = boardingBus;
           p.seat = boardingBus.passengers.length; boardingBus.passengers.push(p);
           if (p.miner) boardingBus.hasPilot = true;         // the miner walked down and took the helm
