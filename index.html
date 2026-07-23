@@ -394,6 +394,9 @@
     geo.tStemW = Math.max(44, rw * 0.22);
     geo.bBarY0 = geo.mergeY0 - H * 0.075;  // mirrored bar at the foot, same depth as the top bar
     geo.bBarY1 = geo.mergeY0 + H * 0.045;
+    // the coinbase mine, dug into the lower bushes, with a shaft up to the bottom bar
+    geo.mineX = geo.roadX0 + rw * 0.21;
+    geo.mineY = geo.bBarY1 + H * 0.15;
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -408,6 +411,7 @@
     if (y > geo.tBarY0 - pad && y < geo.tBarY1 + pad) return true;                      // top bar
     if (y > geo.bBarY0 - pad && y < geo.bBarY1 + pad) return true;                      // mirrored bottom bar
     if (y >= geo.tBarY1 && y <= geo.bBarY0 && Math.abs(x - geo.tStemC) < geo.tStemW/2 + pad) return true;  // stem joining them
+    if (y >= geo.bBarY1 - pad && y <= geo.mineY + 22 && Math.abs(x - geo.mineX) < 28) return true;         // shaft up from the mine
     return false;
   }
   let scroll = 0;                 // world scroll for belt texture + drifting moons
@@ -488,6 +492,34 @@
       ctx.beginPath(); ctx.arc(b.x - s*0.26 + sway, b.y - s*0.24, 1.1, 0, 6.28); ctx.fill();
       ctx.beginPath(); ctx.arc(b.x + s*0.34 + sway, b.y - s*0.04, 0.9, 0, 6.28); ctx.fill();
     }
+  }
+  // the coinbase mine dug into the lower bushes — where the block's miner climbs out
+  function drawMine(time){
+    const mx = geo.mineX, my = geo.mineY, w = 34, h = 30;
+    // spoil heap around the mouth
+    ctx.fillStyle = "#2b2440";
+    ctx.beginPath(); ctx.ellipse(mx, my + h*0.55, w*0.95, 9, 0, 0, 6.28); ctx.fill();
+    // shaft opening
+    ctx.fillStyle = "#070510";
+    ctx.beginPath();
+    ctx.moveTo(mx - w/2, my + h/2);
+    ctx.quadraticCurveTo(mx - w/2, my - h/2, mx, my - h/2);
+    ctx.quadraticCurveTo(mx + w/2, my - h/2, mx + w/2, my + h/2);
+    ctx.closePath(); ctx.fill();
+    // glow spilling out of the shaft
+    const gg = ctx.createRadialGradient(mx, my, 2, mx, my, w);
+    gg.addColorStop(0, "rgba(255,207,90,0.32)"); gg.addColorStop(1, "rgba(255,207,90,0)");
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(mx, my, w, h*0.85, 0, 0, 6.28); ctx.fill();
+    // timber frame
+    ctx.strokeStyle = "#8a734a"; ctx.lineWidth = 4; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(mx - w/2 - 2, my + h/2); ctx.lineTo(mx - w/2 - 2, my - h/2 + 4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx + w/2 + 2, my + h/2); ctx.lineTo(mx + w/2 + 2, my - h/2 + 4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx - w/2 - 5, my - h/2 + 3); ctx.lineTo(mx + w/2 + 5, my - h/2 + 3); ctx.stroke();
+    // lantern over the entrance
+    const flick = 0.75 + Math.sin(time*7)*0.2;
+    ctx.fillStyle = `rgba(255,214,120,${flick.toFixed(2)})`;
+    ctx.shadowColor = "#ffd678"; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(mx, my - h/2 - 3, 3.2, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
   }
   // strange bioluminescent space trees lining the walkway
   function drawSpaceTrees(time){ for (const t of trees) drawSpaceTree(t, time); }
@@ -578,11 +610,12 @@
   let flash = 0, flashColor = "#3dff9a", beltBurst = 0;
   // the block's one coinbase: a miner astronaut that walks down and pilots the ship
   function spawnMiner(){
-    const spawnX = geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20);   // land along the T's top bar
+    // the coinbase doesn't teleport in — it climbs out of the mine in the lower bushes
+    const spawnX = geo.mineX + (Math.random()-0.5) * 6;
     people.push({
       tx: { type: "base", vsize: 300, fee: 0, hash: "" },
       type: TX_TYPES.base, size: 1.12, speed: 50 + Math.random()*22, spawnX,
-      x: spawnX, y: geo.tBarY0 + Math.random() * (geo.tBarY1 - geo.tBarY0), tp: 1,   // teleports onto the T's bar
+      x: spawnX, y: geo.mineY + 4, tp: 0, fromMine: true,
       phase: Math.random()*6.28, sway: Math.random()*6.28,
       state: "walking", boards: true, miner: true,
       cloakGoal: 0.4, cloak: 0, shards: [], targetBus: null, seat: 0,
@@ -838,7 +871,13 @@
       if (p.state === "walking") {
         // materialise first, then start walking the avenue
         if (p.tp > 0) p.tp = Math.max(0, p.tp - dt * 1.7);
-        if (!(p.tp > 0.45)) p.y += p.speed * dt;
+        if (p.fromMine) {
+          // the coinbase climbs up the shaft, then joins the corridor to the ship
+          p.y -= p.speed * dt * 0.85;
+          p.x += (geo.mineX - p.x) * Math.min(1, dt * 2);
+          if (p.y <= geo.mergeY0 - 6){ p.fromMine = false; p.spawnX = p.x; }
+        }
+        else if (!(p.tp > 0.45)) p.y += p.speed * dt;
         // veil shard emission for shielded
         if (p.type.key !== "base" && Math.random() < dt * (p.type.key === "ringct" ? 7 : 3)) {
           p.shards.push({ x: p.x + (Math.random()-0.5)*16*p.size, y: p.y - 8*p.size,
@@ -926,7 +965,7 @@
 
     drawSidewalk(time);
     drawRoad(time);
-    if (!NARROW){ drawBushes(time); drawSpaceTrees(time); }   // bush field + tree line (dropped on phones)
+    if (!NARROW){ drawBushes(time); drawMine(time); drawSpaceTrees(time); }   // bush field, mine + tree line
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
 
@@ -1382,36 +1421,51 @@
 
   // ---- stoplight + Blockchain sign at top of lane ----
   function drawStoplight(time){
-    const x = geo.laneX0 - 6, y = geo.lightY;
+    // on phones the lane is narrow, so drop the whole rig below the Blockchain sign
+    const x = geo.laneX0 - 6, y = NARROW ? geo.gantryY + 58 : geo.lightY;
     // ---- the Veilian mascot, holding up the stoplight ----
     const ms = 2.6, bob = Math.sin(time*1.8)*1.6;          // mascot scale + idle bob
     const hy = y + 62 + bob;                               // mascot head centre
     const by = hy + 11*ms;                                 // body centre
     const green = light === "green";
     // legs
-    ctx.strokeStyle = "#2f8f6a"; ctx.lineWidth = 2.1*ms; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(x-2.1*ms, by+5.2*ms); ctx.lineTo(x-3.1*ms, by+10.5*ms); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x+2.1*ms, by+5.2*ms); ctx.lineTo(x+3.1*ms, by+10.5*ms); ctx.stroke();
-    // body
-    ctx.fillStyle = "#2f8f6a"; ctx.beginPath(); ctx.ellipse(x, by, 3.4*ms, 4.4*ms, 0,0,6.28); ctx.fill();
-    // arm raised to the housing, other arm at its side
-    ctx.strokeStyle = "#2f8f6a"; ctx.lineWidth = 1.9*ms;
-    ctx.beginPath(); ctx.moveTo(x-2.6*ms, by-1.6*ms); ctx.lineTo(x-4.6*ms, by+2.6*ms); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x+2.2*ms, by-2.4*ms); ctx.quadraticCurveTo(x+3.4*ms, hy-4*ms, x+0.9*ms, y+46); ctx.stroke();
-    // head + antennae
-    ctx.fillStyle = "#3dbb86"; ctx.beginPath(); ctx.ellipse(x, hy, 4.3*ms, 4.7*ms, 0,0,6.28); ctx.fill();
-    ctx.strokeStyle = "#3dbb86"; ctx.lineWidth = 1*ms;
-    ctx.beginPath(); ctx.moveTo(x-1.5*ms, hy-4.2*ms); ctx.lineTo(x-2.6*ms, hy-7.6*ms); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x+1.5*ms, hy-4.2*ms); ctx.lineTo(x+2.6*ms, hy-7.6*ms); ctx.stroke();
-    ctx.fillStyle = "#8ffff6"; ctx.shadowColor = "#8ffff6"; ctx.shadowBlur = 6;
-    ctx.beginPath(); ctx.arc(x-2.6*ms, hy-7.6*ms, 1*ms, 0,6.28); ctx.fill();
-    ctx.beginPath(); ctx.arc(x+2.6*ms, hy-7.6*ms, 1*ms, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
-    // big almond eyes
-    ctx.fillStyle = "#05030c";
-    ctx.save(); ctx.translate(x-1.7*ms, hy); ctx.rotate(0.4);
-    ctx.beginPath(); ctx.ellipse(0,0, 1.05*ms, 2*ms, 0,0,6.28); ctx.fill(); ctx.restore();
-    ctx.save(); ctx.translate(x+1.7*ms, hy); ctx.rotate(-0.4);
-    ctx.beginPath(); ctx.ellipse(0,0, 1.05*ms, 2*ms, 0,0,6.28); ctx.fill(); ctx.restore();
+    ctx.strokeStyle = "#1f6b4f"; ctx.lineWidth = 2.0*ms; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(x-1.9*ms, by+4.6*ms); ctx.lineTo(x-2.8*ms, by+10.2*ms); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+1.9*ms, by+4.6*ms); ctx.lineTo(x+2.8*ms, by+10.2*ms); ctx.stroke();
+    // tapered torso
+    const mbg = ctx.createLinearGradient(x, by-5*ms, x, by+6*ms);
+    mbg.addColorStop(0, "#3dbb86"); mbg.addColorStop(1, "#1f6b4f");
+    ctx.fillStyle = mbg; ctx.beginPath(); ctx.ellipse(x, by, 3.1*ms, 4.5*ms, 0,0,6.28); ctx.fill();
+    // one arm down, one raised holding the housing
+    ctx.strokeStyle = "#2f8f6a"; ctx.lineWidth = 1.8*ms;
+    ctx.beginPath(); ctx.moveTo(x-2.4*ms, by-1.4*ms); ctx.lineTo(x-4.3*ms, by+3*ms); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+2.2*ms, by-2.2*ms); ctx.quadraticCurveTo(x+3.5*ms, hy-3*ms, x+1.0*ms, y+48); ctx.stroke();
+    // tapered alien skull
+    const mhg = ctx.createRadialGradient(x-1.4*ms, hy-2.2*ms, 1, x, hy, 6*ms);
+    mhg.addColorStop(0, "#6fe3ae"); mhg.addColorStop(1, "#2f8f6a");
+    ctx.fillStyle = mhg;
+    ctx.beginPath();
+    ctx.moveTo(x, hy + 6.2*ms);
+    ctx.quadraticCurveTo(x - 5.4*ms, hy + 2.4*ms, x - 5.0*ms, hy - 2.2*ms);
+    ctx.quadraticCurveTo(x - 4.4*ms, hy - 6.4*ms, x, hy - 6.6*ms);
+    ctx.quadraticCurveTo(x + 4.4*ms, hy - 6.4*ms, x + 5.0*ms, hy - 2.2*ms);
+    ctx.quadraticCurveTo(x + 5.4*ms, hy + 2.4*ms, x, hy + 6.2*ms);
+    ctx.closePath(); ctx.fill();
+    // antennae
+    ctx.strokeStyle = "#2f8f6a"; ctx.lineWidth = 0.9*ms;
+    ctx.beginPath(); ctx.moveTo(x-2.2*ms, hy-5.6*ms); ctx.lineTo(x-3.4*ms, hy-9.4*ms); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+2.2*ms, hy-5.6*ms); ctx.lineTo(x+3.4*ms, hy-9.4*ms); ctx.stroke();
+    ctx.fillStyle = "#8ffff6"; ctx.shadowColor = "#8ffff6"; ctx.shadowBlur = 7;
+    ctx.beginPath(); ctx.arc(x-3.4*ms, hy-9.4*ms, 0.95*ms, 0,6.28); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+3.4*ms, hy-9.4*ms, 0.95*ms, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
+    // the Veil "V" as its eyes — the brand mark, big and glowing
+    ctx.strokeStyle = "#8ffff6"; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.lineWidth = 1.55*ms; ctx.shadowColor = "#22e0d6"; ctx.shadowBlur = 13;
+    ctx.beginPath();
+    ctx.moveTo(x - 3.4*ms, hy - 2.3*ms);
+    ctx.lineTo(x, hy + 3.0*ms);
+    ctx.lineTo(x + 3.4*ms, hy - 2.3*ms);
+    ctx.stroke(); ctx.shadowBlur = 0;
     // ---- the stoplight it holds up: red on top, green below ----
     const hw = 26, hh = 52;
     ctx.fillStyle = "#0a0713"; roundRect(x-hw/2, y, hw, hh, 7); ctx.fill();
