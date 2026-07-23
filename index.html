@@ -456,6 +456,13 @@
     if (lead) {
       lead.algo = algo;
       if (block) { lead.blockHeight = block.height; lead.blockHash = block.hash; lead.blockTxcount = block.txcount; }
+      // every block has a coinbase: make sure its miner is aboard before takeoff.
+      // if one is still walking, snap it into this ship (it made it just in time).
+      if (!lead.hasPilot) {
+        const m = people.find(p => p.miner && p.state !== "gone");
+        if (m) { m.state = "riding"; m.targetBus = lead; if (!lead.passengers.includes(m)) lead.passengers.push(m); }
+        lead.hasPilot = true;
+      }
       lead.state = "leaving"; lead.vy = -1.4;   // drive up toward the Blockchain sign
       for (const c of lead.passengers) c.state = "riding";
     }
