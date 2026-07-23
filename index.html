@@ -99,7 +99,7 @@
   .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
 
   .block-timer {
-    position: absolute; right: 18px; top: 14px; z-index: 5;
+    position: absolute; right: 10px; top: 10px; z-index: 5;
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 10px 16px; text-align: center; backdrop-filter: blur(8px); min-width: 150px;
   }
@@ -232,10 +232,6 @@
     <canvas id="scene"></canvas>
 
     <div class="block-timer">
-      <div class="bt-label" id="bt-label">Next Block In</div>
-      <div class="bt-value" id="bt-value">60</div>
-      <div class="bt-sub" id="bt-sub">0 tx boarding</div>
-      <div class="bt-bar"><div class="bt-fill" id="bt-fill"></div></div>
       <div class="rb-title">Recent blocks · algorithm</div>
       <div class="rb-chips" id="rbChips"></div>
       <div class="rb-legend">
@@ -374,7 +370,8 @@
       y += 70 + Math.random() * 60;
     }
     stars = [];
-    for (let i = 0; i < 110; i++) stars.push({ x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.3+0.3, tw: Math.random()*6.28 });
+    for (let i = 0; i < 190; i++) stars.push({ x: Math.random()*W, y: Math.random()*H, r: Math.random()*1.4+0.3,
+      tw: Math.random()*6.28, dx: (Math.random()-0.5)*0.09, dy: -(0.02 + Math.random()*0.11) });
     // distant planets, parked in the right margin (beyond the launch lane)
     planets = [
       { x: W*0.91, y: H*0.34, r: Math.max(34, W*0.055), c1:"#4a3a86", c2:"#140f2c", rim:"rgba(160,130,255,0.30)", ring:true },
@@ -391,6 +388,22 @@
         ctx.strokeStyle = "rgba(180,150,255,0.35)"; ctx.lineWidth = 3.5;
         ctx.beginPath(); ctx.arc(0, 0, p.r*1.55, 0, 6.28); ctx.stroke(); ctx.restore(); }
     }
+  }
+  // the destination moon at the head of the lane — where the ships fly, past the Blockchain sign
+  function drawDestination(time){
+    const mx = geo.laneC, my = -H*0.03, r = Math.max(60, (geo.laneX1-geo.laneX0)*0.52);
+    const halo = ctx.createRadialGradient(mx, my, r*0.6, mx, my, r*1.7);
+    halo.addColorStop(0,"rgba(130,160,255,0.14)"); halo.addColorStop(1,"rgba(130,160,255,0)");
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(mx, my, r*1.7, 0, 6.28); ctx.fill();
+    const g = ctx.createRadialGradient(mx-r*0.35, my-r*0.1, r*0.1, mx, my, r);
+    g.addColorStop(0,"#5a6bab"); g.addColorStop(0.6,"#33406e"); g.addColorStop(1,"#141b38");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(mx, my, r, 0, 6.28); ctx.fill();
+    ctx.fillStyle = "rgba(18,24,52,0.5)";                       // craters (visible lower half)
+    for (const [dx,dy,dr] of [[0.22,0.4,0.15],[-0.32,0.55,0.11],[0.46,0.62,0.09],[0.04,0.74,0.12],[-0.12,0.32,0.07]]){
+      ctx.beginPath(); ctx.arc(mx+dx*r, my+dy*r, dr*r, 0, 6.28); ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(150,180,255,0.4)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(mx, my, r, 0, 6.28); ctx.stroke();
   }
 
   // ---------------------------------------------------------------------------
@@ -696,12 +709,16 @@
   // ambient shards drifting up the whole scene
   let ambient = [];
   function updateAmbient(dt){
-    if (ambient.length < 40 && Math.random() < dt*18)
-      ambient.push({ x: geo.roadX0 + Math.random()*(geo.laneX1-geo.roadX0), y: H+10,
-        vx:(Math.random()-0.5)*0.1, vy:-(0.15+Math.random()*0.3), r:1+Math.random()*2.2,
-        life:1, hue: Math.random()<0.5?"#7b2fd6":"#22e0d6", ph: Math.random()*6.28 });
-    for (const p of ambient){ p.x+=p.vx; p.y+=p.vy; p.ph+=dt*2; p.life-=dt*0.05; }
-    ambient = ambient.filter(p => p.life>0 && p.y>-20);
+    if (ambient.length < 115 && Math.random() < dt*55){
+      const rock = Math.random() < 0.5;
+      ambient.push({ x: geo.roadX0 + Math.random()*(geo.laneX1-geo.roadX0), y: H+14,
+        vx:(Math.random()-0.5)*0.15, vy:-(0.3+Math.random()*0.7), r: rock ? (4+Math.random()*7) : (1.4+Math.random()*2.4),
+        spin:(Math.random()-0.5)*0.05, life:1, rock,
+        hue: rock ? (Math.random()<0.5?"#948ca8":"#7d7592") : (Math.random()<0.5?"#9a5cff":"#3df0e6"),
+        ph: Math.random()*6.28 });
+    }
+    for (const p of ambient){ p.x+=p.vx; p.y+=p.vy; p.ph += (p.spin||0) + dt*2; p.life -= dt*0.03; }
+    ambient = ambient.filter(p => p.life>0 && p.y>-30);
   }
 
   // ===========================================================================
@@ -722,18 +739,39 @@
     const aur = ctx.createRadialGradient(W*0.85, H*0.2, 20, W*0.85, H*0.2, H*0.7);
     aur.addColorStop(0,"rgba(34,224,214,0.10)"); aur.addColorStop(1,"rgba(34,224,214,0)");
     ctx.fillStyle = aur; ctx.fillRect(0,0,W,H);
-    for (const s of stars){ ctx.globalAlpha = 0.4 + Math.sin(time*2+s.tw)*0.25; ctx.fillStyle="#e6f0ff";
-      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.28); ctx.fill(); }
+    for (const s of stars){
+      s.x += s.dx; s.y += s.dy;                                   // gentle drift
+      if (s.y < -2){ s.y = H+2; s.x = Math.random()*W; }
+      if (s.x < -2) s.x = W+2; else if (s.x > W+2) s.x = -2;
+      ctx.globalAlpha = 0.4 + Math.sin(time*2+s.tw)*0.25; ctx.fillStyle="#e6f0ff";
+      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,6.28); ctx.fill();
+    }
     ctx.globalAlpha = 1;
     drawPlanets();
 
     drawSidewalk(time);
     drawRoad(time);
     drawLane(time);
+    drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
 
-    // ambient shards behind actors
-    for (const p of ambient){ ctx.globalAlpha=Math.max(0,p.life)*0.5; ctx.fillStyle=p.hue;
-      ctx.save(); ctx.translate(p.x, p.y+Math.sin(p.ph)*3); ctx.rotate(p.ph); ctx.fillRect(-p.r,-p.r,p.r*2,p.r*2); ctx.restore(); }
+    // ambient space debris behind actors: shards + drifting asteroids
+    for (const p of ambient){
+      ctx.globalAlpha = Math.max(0,p.life) * (p.rock ? 0.75 : 0.5);
+      ctx.save(); ctx.translate(p.x, p.y+Math.sin(p.ph)*3); ctx.rotate(p.ph);
+      if (p.rock){
+        ctx.beginPath();
+        for (let i=0;i<7;i++){ const a=i/7*6.28, rr=p.r*(0.72+((i*3)%5)/12), px=Math.cos(a)*rr, py=Math.sin(a)*rr; i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+        ctx.closePath();
+        ctx.fillStyle = p.hue; ctx.fill();
+        ctx.strokeStyle = "rgba(200,205,225,0.35)"; ctx.lineWidth = 0.8; ctx.stroke();     // lit rim
+        ctx.fillStyle = "rgba(0,0,0,0.30)"; ctx.beginPath(); ctx.arc(p.r*0.25,-p.r*0.12,p.r*0.3,0,6.28); ctx.fill();   // crater
+        ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.beginPath(); ctx.arc(-p.r*0.32,-p.r*0.32,p.r*0.2,0,6.28); ctx.fill();
+      } else {
+        ctx.fillStyle = p.hue; ctx.shadowColor = p.hue; ctx.shadowBlur = 5;
+        ctx.fillRect(-p.r,-p.r,p.r*2,p.r*2); ctx.shadowBlur = 0;
+      }
+      ctx.restore();
+    }
     ctx.globalAlpha = 1;
 
     // buses under gantry
@@ -905,7 +943,7 @@
       ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-0.8, sy-0.8, 0.9, 0, 6.28); ctx.fill();
     }
     // the coinbase astronaut — always at the helm, so every block shows its miner
-    const ax = cx, ay = domeCY - domeH*0.08, as = Math.max(3.6, domeW*0.12);
+    const ax = cx, ay = domeCY - domeH*0.04, as = Math.max(2.6, domeW*0.088);
     // pickaxe over the shoulder (miner / staker): wooden handle + curved steel head
     const hgx = ax + as*1.7, hgy = ay + as*1.8;   // grip (lower right)
     const hdx = ax - as*1.35, hdy = ay - as*1.5;  // head (upper left, above the shoulder)
@@ -1125,15 +1163,23 @@
       if (on){ ctx.shadowColor = col; ctx.shadowBlur = 12; }
       ctx.beginPath(); ctx.arc(x, ly, 4.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
     }
-    // green "Blockchain ↑" sign on the gantry arm
-    const sx = geo.laneC + 4, sy = geo.gantryY;
-    ctx.fillStyle = "#0c3b24"; ctx.strokeStyle = "rgba(61,255,154,0.7)"; ctx.lineWidth = 1.6;
-    roundRect(sx-42, sy, 84, 30, 5); ctx.fill(); roundRect(sx-42, sy, 84, 30, 5); ctx.stroke();
-    ctx.fillStyle = "#d6ffe9"; ctx.textAlign="center"; ctx.font="700 10px ui-monospace, monospace";
-    ctx.fillText("Blockchain", sx-4, sy+14);
-    ctx.fillStyle="#3dff9a"; ctx.font="800 13px ui-monospace"; ctx.fillText("↑", sx+30, sy+16);
-    // post for sign
-    ctx.strokeStyle="#2a1c48"; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(sx+38,0); ctx.lineTo(sx+38, sy+30); ctx.stroke();
+    // big green "Blockchain" sign (arrow above the word) at the head of the lane
+    const sx = geo.laneC, sy = geo.gantryY - 8, sw = 112, sh = 46;
+    ctx.strokeStyle="#2a1c48"; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(sx-sw/2+9, 0); ctx.lineTo(sx-sw/2+9, sy+sh); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx+sw/2-9, 0); ctx.lineTo(sx+sw/2-9, sy+sh); ctx.stroke();
+    ctx.save();
+    ctx.fillStyle = "#0c3b24"; ctx.strokeStyle = "rgba(61,255,154,0.85)"; ctx.lineWidth = 2;
+    ctx.shadowColor = "rgba(61,255,154,0.55)"; ctx.shadowBlur = 14;
+    roundRect(sx-sw/2, sy, sw, sh, 8); ctx.fill(); ctx.shadowBlur = 0;
+    roundRect(sx-sw/2, sy, sw, sh, 8); ctx.stroke();
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillStyle="#3dff9a"; ctx.shadowColor="#3dff9a"; ctx.shadowBlur=8; ctx.font="900 18px ui-monospace";
+    ctx.fillText("↑", sx, sy+sh*0.32); ctx.shadowBlur=0;
+    ctx.fillStyle = "#d6ffe9"; ctx.font="800 15px ui-monospace, monospace";
+    ctx.fillText("Blockchain", sx, sy+sh*0.72);
+    ctx.textBaseline="alphabetic";
+    ctx.restore();
 
     // ---- little Veilian mascot waving by the Blockchain sign ----
     const mx = geo.laneX0 + 14, ms = 1.55, my = geo.gantryY + 22 + Math.sin(time*2)*1.5;
@@ -1164,19 +1210,8 @@
 
   // HUD
   function renderHUD(){
-    const lead = buses.find(b=>b.state==="waiting");        // only the ship actually boarding
-    const aboard = lead ? lead.passengers.length + 1 : 1;   // +1 = the coinbase pilot
-    if (LIVE){
-      el.btLabel.textContent = "Last Block";
-      el.btVal.textContent = Math.floor(Math.max(0, stat.lastBlock)) + "s";
-      el.btSub.textContent = aboard + " tx aboard";
-      el.btFill.style.width = Math.min(100, stat.lastBlock/BLOCK_TIME*100) + "%";
-    } else {
-      el.btLabel.textContent = "Next Block In";
-      el.btVal.textContent = Math.ceil(Math.max(0, blockClock));
-      el.btSub.textContent = aboard + " tx aboard";
-      el.btFill.style.width = (100*(1 - blockClock/BLOCK_TIME)) + "%";
-    }
+    // the block clock now lives on the gantry marquee (drawGantry); the corner
+    // panel is just the recent-blocks strip, so there's nothing to update here.
   }
 
   // Stats popover toggle
