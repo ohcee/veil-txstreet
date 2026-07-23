@@ -692,7 +692,9 @@
     const tx = makeTxFromData(d);
     const size = sizeFromVsize(tx.vsize);
     const feePriority = Math.min(1, (tx.fee || 0) / 0.0004);
-    const speed = 42 + feePriority * 120 + Math.random() * 20;   // px/sec downward
+    // deliberately slow so you can watch them cross; the shielded types amble the most
+    const baseSpd = type.key === "ringct" ? 10 : type.key === "stealth" ? 14 : 22;
+    const speed = baseSpd + feePriority * 8 + Math.random() * 4;   // px/sec
     const p = {
       tx, type, size, speed, spawnX,
       x: spawnX,
@@ -926,6 +928,7 @@
 
 
     if (lightTimer > 0) { lightTimer -= dt; if (lightTimer <= 0) light = "red"; }
+    const rush = light === "green" ? 3.4 : 1;   // a ship is pulling out — run for it
     gantryTimer += dt; if (gantryTimer > 3.6) { gantryTimer = 0; gantryIdx = (gantryIdx + 1) % gantrySub().length; }
 
     // buses
@@ -951,11 +954,11 @@
         if (p.tp > 0) p.tp = Math.max(0, p.tp - dt * 1.7);
         if (p.climbing) {
           // came up out of the mine (or the lower gate), then joins the corridor to the ship
-          p.y -= p.speed * dt * 0.9;
+          p.y -= p.speed * rush * dt * 0.9;
           p.x += (p.climbX - p.x) * Math.min(1, dt * 2);
           if (p.y <= geo.mergeY0 + 6){ p.climbing = false; p.spawnX = p.x; }
         }
-        else if (!(p.tp > 0.45)) p.y += p.speed * dt;
+        else if (!(p.tp > 0.45)) p.y += p.speed * rush * dt;
         // veil shard emission for shielded
         if (p.type.key !== "base" && Math.random() < dt * (p.type.key === "ringct" ? 7 : 3)) {
           p.shards.push({ x: p.x + (Math.random()-0.5)*16*p.size, y: p.y - 8*p.size,
@@ -1272,9 +1275,14 @@
     const bh = b.blockHeight!=null ? b.blockHeight : stat.height+1;
     const bt = b.blockTxcount!=null ? b.blockTxcount : (b.passengers.filter(p=>!p.miner).length + (b.hasPilot?1:0));   // +pilot once boarded
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(233,226,255,0.9)"; ctx.font = "800 10px ui-monospace, monospace"; ctx.fillText("BLOCK", cx, y+h*0.66);
-    ctx.fillStyle = oc; ctx.font = "800 12px ui-monospace, monospace"; ctx.fillText("#"+bh.toLocaleString(), cx, y+h*0.74);
-    ctx.fillStyle = "rgba(233,226,255,0.6)"; ctx.font = "700 9px ui-monospace, monospace"; ctx.fillText(bt+" tx", cx, y+h*0.81);
+    ctx.fillStyle = "rgba(233,226,255,0.9)"; ctx.font = "800 10px ui-monospace, monospace"; ctx.fillText("BLOCK", cx, y+h*0.64);
+    ctx.fillStyle = oc; ctx.font = "800 12px ui-monospace, monospace"; ctx.fillText("#"+bh.toLocaleString(), cx, y+h*0.72);
+    ctx.fillStyle = "rgba(233,226,255,0.6)"; ctx.font = "700 9px ui-monospace, monospace"; ctx.fillText(bt+" tx", cx, y+h*0.79);
+    // block hash stencilled on the rear, so you can check who's riding which block
+    if (b.blockHash){
+      ctx.fillStyle = hexA(oc, 0.85); ctx.font = "700 7.5px ui-monospace, monospace";
+      ctx.fillText(short(b.blockHash, 6, 6), cx, y+h*0.845);
+    }
 
     // engine nozzles — two outboard, leaving the centre clear for the plate
     for (const i of [-1, 1]){
@@ -1458,7 +1466,8 @@
     const x0 = geo.roadX0 - 6, x1 = geo.roadX1 + 6, w = x1-x0, bh = 50, cxm = (x0+x1)/2;
     // how overdue is the block?  1.0 = on schedule; the sign heats up past that
     const late = LIVE ? Math.max(0, stat.lastBlock) / BLOCK_TIME : 0;
-    const urgent = late >= 2.5, warm = late >= 1.25, onTime = late < 1;   // < 1 == inside the 60s block time
+    const urgent = late >= 5, warm = late >= 2.5, onTime = late < 1;   // < 1 == inside the 60s target;
+    // Veil's real spacing swings from ~10s to ~2min, so LATE only past ~2.5min and OVERDUE past ~5min
     const pulse = warm ? 0.5 + 0.5*Math.sin(time * (urgent ? 7 : 4)) : 0;
     const y = geo.gantryY + (urgent ? Math.sin(time*22) * Math.min(1.6, (late-2.5)*1.2) : 0);
     const heroCol  = urgent ? "#ff5d5d" : warm ? "#ff9a3c" : onTime ? "#3dff9a" : "#ffcf5a";
@@ -1678,8 +1687,9 @@
       if (s.difficulty) stat.difficulty = s.difficulty;
       if (s.hashrate) stat.hashrate = s.hashrate;
       if (typeof s.mempool === "number") stat.mempool = s.mempool;
-      // initialise the "time since last block" from the node once, then let it tick locally
-      if (!blockClockSynced && typeof s.sinceBlock === "number"){ stat.lastBlock = s.sinceBlock; blockClockSynced = true; }
+      // anchor the "time since last block" to the node on every poll so it can't drift
+      // (it still ticks locally between polls for a smooth count)
+      if (typeof s.sinceBlock === "number") stat.lastBlock = s.sinceBlock;
     }
   }
   function onLiveTx(ev){
