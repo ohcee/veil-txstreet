@@ -200,7 +200,9 @@ async function poll() {
           let blk, full = true;
           try { blk = await rpc("getblock", [hash, 2]); } catch (_) { blk = await rpc("getblock", [hash]); full = false; }
           const txs = blk.tx || [];
-          push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000 });
+          // txids let the UI group the feed's transactions under the block that confirmed them
+          const txids = txs.slice(0, 60).map(t => (full ? (t.txid || t) : t));
+          push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000, txids });
           tipTime = blk.time || tipTime;
           // surface confirmed txs we never saw in the mempool, so the feed matches the explorer
           txs.forEach((tx, idx) => {

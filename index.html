@@ -106,24 +106,6 @@
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 10px 16px; text-align: center; backdrop-filter: blur(8px); min-width: 150px;
   }
-  /* compact 5-block explorer under the recent-blocks strip (wide screens only) */
-  .mini-explorer {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-    padding: 9px 11px 10px; backdrop-filter: blur(8px); min-width: 186px;
-  }
-  .me-list { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
-  .me-row {
-    display: grid; grid-template-columns: 8px 1fr auto auto; align-items: center; gap: 7px;
-    padding: 4px 6px; border-radius: 6px; cursor: pointer;
-    font-size: 10px; font-variant-numeric: tabular-nums;
-    background: rgba(255,255,255,0.03); border: 1px solid transparent; transition: background 0.15s, border-color 0.15s;
-  }
-  .me-row:hover { background: rgba(123,47,214,0.16); border-color: var(--border); }
-  .me-dot { width: 8px; height: 8px; border-radius: 2px; }
-  .me-h { color: var(--text); font-weight: 700; }
-  .me-tx { color: var(--text-dim); font-size: 9px; }
-  .me-ago { color: var(--text-faint); font-size: 9px; min-width: 26px; text-align: right; }
-  @media (max-width: 1180px) { .mini-explorer { display: none; } }
   .bt-label { font-size: 8.5px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; }
   .bt-value { font-size: 26px; font-weight: 800; color: var(--veil-cyan); margin: 2px 0; font-variant-numeric: tabular-nums; }
   .bt-sub { font-size: 9px; color: var(--text-dim); letter-spacing: 0.5px; }
@@ -187,6 +169,20 @@
   .search:focus { border-color: var(--veil-cyan); box-shadow: 0 0 0 2px rgba(34,224,214,0.15); }
   .ratio-bar { display: flex; height: 26px; border-radius: 7px; overflow: hidden; margin-top: 11px; border: 1px solid var(--border); }
   .ratio-seg { display: flex; align-items: center; justify-content: center; font-size: 8.5px; font-weight: 700; letter-spacing: 0.5px; color: #06040d; transition: flex 0.6s ease; overflow: hidden; white-space: nowrap; }
+  /* feed group headers: pending, then one per block */
+  .grp {
+    display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 8px;
+    margin: 10px 2px 4px; padding: 5px 8px; border-radius: 7px;
+    font-size: 10px; letter-spacing: 0.6px; font-variant-numeric: tabular-nums;
+    background: rgba(255,255,255,0.045); border: 1px solid var(--border);
+  }
+  .grp-dot { width: 9px; height: 9px; border-radius: 3px; }
+  .grp-left { color: var(--text); font-weight: 700; }
+  .grp-left i { font-style: normal; font-size: 8.5px; margin-left: 6px; letter-spacing: 1px; }
+  .grp-right { color: var(--text-faint); font-size: 9px; }
+  .grp-block { cursor: pointer; transition: background 0.15s; }
+  .grp-block:hover { background: rgba(123,47,214,0.18); }
+  .grp-pending .grp-left { color: var(--veil-cyan); }
   .tx-list { flex: 1; overflow-y: auto; padding: 6px 10px 14px; }
   .tx-list::-webkit-scrollbar { width: 6px; }
   .tx-list::-webkit-scrollbar-thumb { background: rgba(123,47,214,0.4); border-radius: 3px; }
@@ -264,10 +260,6 @@
           <span><i style="background:#ffab3d"></i>RandomX</span>
           <span><i style="background:#ff5d7a"></i>SHA256d</span>
         </div>
-      </div>
-      <div class="mini-explorer">
-        <div class="rb-title">Latest blocks</div>
-        <div class="me-list" id="meList"></div>
       </div>
     </div>
 
@@ -681,27 +673,7 @@
       c.title = a.name + (b.height ? " · #" + b.height.toLocaleString() : "");
       frag.appendChild(c); }
     host.replaceChildren(frag);
-    renderMiniExplorer();
-  }
-  // compact 5-block explorer under the strip; click a row to open it in the Veil explorer
-  function renderMiniExplorer(){
-    const host = document.getElementById("meList"); if (!host) return;
-    const frag = document.createDocumentFragment();
-    for (const b of recentBlocks.slice(0, 5)){
-      const a = algoOf(b.algo);
-      const row = document.createElement("div");
-      row.className = "me-row";
-      if (b.height) row.setAttribute("data-h", b.height);
-      row.title = b.height ? "Open block #" + b.height.toLocaleString() + " in the Veil explorer" : a.name;
-      const ago = b.t ? Math.max(0, Math.round((Date.now() - b.t)/1000)) : null;
-      const dot = document.createElement("span"); dot.className = "me-dot"; dot.style.background = a.color;
-      const h = document.createElement("span"); h.className = "me-h"; h.textContent = "#" + (b.height||0).toLocaleString();
-      const tx = document.createElement("span"); tx.className = "me-tx"; tx.textContent = b.txcount != null ? b.txcount + " tx" : "";
-      const t = document.createElement("span"); t.className = "me-ago"; t.textContent = ago != null ? (ago < 90 ? ago + "s" : Math.round(ago/60) + "m") : "";
-      row.append(dot, h, tx, t);
-      frag.appendChild(row);
-    }
-    host.replaceChildren(frag);
+    renderTxList();          // the feed groups transactions under these blocks
   }
 
   // ---------------------------------------------------------------------------
@@ -714,8 +686,9 @@
   // core factory — used by both the simulation and the live feed
   function addPerson(d) {
     const type = TX_TYPES[(d.type in TX_TYPES) ? d.type : "base"];
-    // most Veilians teleport onto the T's top bar; some arrive at the lower gate and walk up
-    const viaGate = d.atY == null && Math.random() < 0.3;
+    // RingCT are the special ones — they come up through the lower gate; everyone else
+    // teleports onto the T's top bar
+    const viaGate = d.atY == null && type.key === "ringct";
     const spawnX = viaGate ? geo.gateX + (Math.random()-0.5)*18
                            : geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20);
     const tx = makeTxFromData(d);
@@ -777,30 +750,68 @@
   let recentTx = [], searchTerm = "";
   searchEl.addEventListener("input", () => { searchTerm = searchEl.value.trim().toLowerCase(); renderTxList(); });
   txListEl.addEventListener("click", (e) => {
+    const grp = e.target.closest(".grp-block");
+    if (grp){ const bh = grp.getAttribute("data-h"); if (bh) openExt(explorerBlock(+bh)); return; }
     const row = e.target.closest(".tx"); if (!row) return;
     const h = row.getAttribute("data-hash"); if (h) openExt(explorerTx(h));
   });
   function addTxToFeed(tx){ recentTx.unshift(tx); if (recentTx.length > 60) recentTx.pop(); renderTxList(); }
   function short(h,a=8,b=6){ return h.length>a+b ? h.slice(0,a)+"…"+h.slice(-b) : h; }
+  // each block gets its own colour so its transactions are identifiable at a glance
+  const BLOCK_HUES = ["#7b9cff","#ff8ad4","#66e0a3","#ffc36b","#9d7bff","#4fd8e0","#ff7f7f"];
+  function blockColorFor(h){ return BLOCK_HUES[((h % BLOCK_HUES.length) + BLOCK_HUES.length) % BLOCK_HUES.length]; }
+
+  function txRow(tx, barColor){
+    const t = TX_TYPES[tx.type] || TX_TYPES.base;
+    const elx = document.createElement("div");
+    elx.className = "tx"; elx.style.borderLeftColor = barColor;
+    elx.setAttribute("data-hash", tx.hash);
+    elx.title = "Open transaction in the Veil explorer";
+    elx.innerHTML =
+      `<div class="tx-ico" style="background:${hexA(t.color,0.16)};color:${t.color}">${t.icon}</div>
+       <div class="tx-body">
+         <div class="tx-hash">0x${short(tx.hash)}</div>
+         <div class="tx-meta">${tx.addr ? short(tx.addr,6,4)+" · " : "shielded · "}<span class="tx-type-badge" style="background:${hexA(t.color,0.2)};color:${t.color}">${t.name}</span></div>
+       </div>
+       <div class="tx-amt"><div class="tx-amt-val">${fmtSize(tx.vsize)}</div><div class="tx-amt-usd">${fmtFee(tx.fee)}</div></div>
+       <div class="tx-ext">↗</div>`;
+    return elx;
+  }
+  function groupHeader(cls, color, left, right, title){
+    const h = document.createElement("div");
+    h.className = "grp " + cls;
+    if (title) h.title = title;
+    h.innerHTML = `<span class="grp-dot" style="background:${color}"></span>
+       <span class="grp-left">${left}</span><span class="grp-right">${right}</span>`;
+    return h;
+  }
+  // one feed: pending transactions on top, then each block with the transactions it confirmed
   function renderTxList() {
     const q = searchTerm;
     const rows = recentTx.filter(tx => !q || tx.hash.includes(q) || (tx.addr && tx.addr.toLowerCase().includes(q)));
     const frag = document.createDocumentFragment();
-    for (const tx of rows.slice(0, 40)) {
-      const t = TX_TYPES[tx.type];
-      const elx = document.createElement("div");
-      elx.className = "tx"; elx.style.borderLeftColor = t.color;
-      elx.setAttribute("data-hash", tx.hash);
-      elx.title = "Open transaction in the Veil explorer";
-      elx.innerHTML =
-        `<div class="tx-ico" style="background:${hexA(t.color,0.16)};color:${t.color}">${t.icon}</div>
-         <div class="tx-body">
-           <div class="tx-hash">0x${short(tx.hash)}</div>
-           <div class="tx-meta">${tx.addr ? short(tx.addr,6,4)+" · " : "shielded · "}<span class="tx-type-badge" style="background:${hexA(t.color,0.2)};color:${t.color}">${t.name}</span></div>
-         </div>
-         <div class="tx-amt"><div class="tx-amt-val">${fmtSize(tx.vsize)}</div><div class="tx-amt-usd">${fmtFee(tx.fee)}</div></div>
-         <div class="tx-ext">↗</div>`;
-      frag.appendChild(elx);
+    let shown = 0;
+    const pending = rows.filter(tx => tx.bh == null);
+    if (pending.length){
+      frag.appendChild(groupHeader("grp-pending", "#22e0d6", "Pending", pending.length + " tx",
+        "Transactions in the mempool, not yet in a block"));
+      for (const tx of pending.slice(0, 14)){ frag.appendChild(txRow(tx, "#22e0d6")); shown++; }
+    }
+    // blocks newest first, each followed by its transactions
+    for (const b of recentBlocks){
+      if (shown >= 60) break;
+      const col = blockColorFor(b.height || 0);
+      const mine = rows.filter(tx => tx.bh === b.height);
+      if (!mine.length && q) continue;                       // while searching, hide empty blocks
+      const a = algoOf(b.algo);
+      const ago = b.t ? Math.max(0, Math.round((Date.now() - b.t)/1000)) : null;
+      const hdr = groupHeader("grp-block", col,
+        `#${(b.height||0).toLocaleString()} <i style="color:${a.color}">${a.label}</i>`,
+        `${b.txcount != null ? b.txcount + " tx" : ""}${ago != null ? " · " + (ago < 90 ? ago + "s" : Math.round(ago/60) + "m") : ""}`,
+        "Open block in the Veil explorer");
+      if (b.height) hdr.setAttribute("data-h", b.height);
+      frag.appendChild(hdr);
+      for (const tx of mine.slice(0, 12)){ frag.appendChild(txRow(tx, col)); shown++; }
     }
     txListEl.replaceChildren(frag);
   }
@@ -858,7 +869,6 @@
     el.spStealth.textContent = c.stealth.toLocaleString();
     el.spRingct.textContent = c.ringct.toLocaleString();
     el.spPriv.textContent = (privacyRatio()*100).toFixed(1) + "%";
-    renderMiniExplorer();          // keeps the "ago" column ticking
   }
   setInterval(() => {
     if (LIVE) return;                       // node supplies these when live
@@ -1571,13 +1581,6 @@
   const statsPop = document.getElementById("statsPop");
   document.getElementById("statsChip").addEventListener("click", () => statsPop.classList.toggle("open"));
 
-  // mini explorer rows -> open that block in the Veil explorer
-  const meListEl = document.getElementById("meList");
-  if (meListEl) meListEl.addEventListener("click", (e) => {
-    const row = e.target.closest(".me-row"); if (!row) return;
-    const h = row.getAttribute("data-h"); if (h) openExt(explorerBlock(+h));
-  });
-
   // canvas click -> inspect nearest person
   canvas.addEventListener("click", (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -1672,7 +1675,14 @@
     if (walking < 100) addPerson(d);          // animate it walking the street
     else addTxToFeed(makeTxFromData(d));       // burst overflow: list only
   }
-  function onLiveBlock(ev){ mineBlock({ height: ev.height, hash: ev.hash, txcount: ev.txcount, algo: ev.algo }); }
+  function onLiveBlock(ev){
+    // tag the feed entries this block confirmed so they group under it
+    if (ev.txids && ev.txids.length){
+      const set = new Set(ev.txids);
+      for (const tx of recentTx) if (tx.bh == null && set.has(tx.hash)) tx.bh = ev.height;
+    }
+    mineBlock({ height: ev.height, hash: ev.hash, txcount: ev.txcount, algo: ev.algo });
+  }
   async function pollFeed(){
     try {
       const r = await fetch("/api/state?since=" + feedSeq, { cache: "no-store" });
