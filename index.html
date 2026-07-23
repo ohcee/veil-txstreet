@@ -46,8 +46,14 @@
     background: linear-gradient(90deg, transparent, var(--veil-cyan), var(--veil-purple-bright), transparent);
     opacity: 0.7;
   }
-  .brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; position: relative; }
   .brand-mark { width: 38px; height: 38px; filter: drop-shadow(0 0 10px rgba(123,47,214,0.7)); }
+  .brand-alien {
+    position: absolute; left: 22px; top: -15px; width: 22px; height: 33px; z-index: 4;
+    transform-origin: 50% 4px; animation: alienSway 3.6s ease-in-out infinite;
+    filter: drop-shadow(0 0 5px rgba(61,255,154,0.45)); pointer-events: none;
+  }
+  @keyframes alienSway { 0%,100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }
   .brand-text { display: flex; flex-direction: column; line-height: 1; }
   .brand-name {
     font-size: 20px; font-weight: 800; letter-spacing: 3px;
@@ -210,6 +216,21 @@
   <nav>
     <div class="brand">
       <img class="brand-mark" src="veil-mark.svg" alt="Veil" />
+      <svg class="brand-alien" viewBox="0 0 28 42" aria-hidden="true">
+        <path d="M14 15 Q19 7 24 5" stroke="#2f8f6a" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+        <ellipse cx="13" cy="25" rx="6" ry="7.6" fill="#2f8f6a"/>
+        <path d="M10 29 Q7 35 8.5 40" stroke="#2f8f6a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <path d="M16 29 Q19 35 17.5 40" stroke="#2f8f6a" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <ellipse cx="13" cy="15" rx="7.2" ry="7.6" fill="#3dbb86"/>
+        <path d="M10 8.5 L8 3.5" stroke="#3dbb86" stroke-width="1.7" stroke-linecap="round"/>
+        <path d="M16 8.5 L18 3.5" stroke="#3dbb86" stroke-width="1.7" stroke-linecap="round"/>
+        <circle cx="8" cy="3.5" r="1.7" fill="#8ffff6"/>
+        <circle cx="18" cy="3.5" r="1.7" fill="#8ffff6"/>
+        <ellipse cx="10" cy="15" rx="1.9" ry="2.7" fill="#05030c"/>
+        <ellipse cx="16" cy="15" rx="1.9" ry="2.7" fill="#05030c"/>
+        <circle cx="10.6" cy="13.9" r="0.6" fill="#8ffff6"/>
+        <circle cx="16.6" cy="13.9" r="0.6" fill="#8ffff6"/>
+      </svg>
       <div class="brand-text">
         <div class="brand-name">VEIL</div>
         <div class="brand-tag">Built private · Built to last</div>
@@ -443,10 +464,24 @@
     buses.push(makeBus(true));
     blockClock = BLOCK_TIME;
     beltBurst = 1.6;                 // the walkway surges forward as the block lands
+    // send the next block's single coinbase miner walking down (one at a time)
+    if (!people.some(p => p.miner && p.state === "walking")) spawnMiner();
     flash = 1; flashColor = algoOf(algo).color;
     pushRecentBlock({ height: (block ? block.height : stat.height), algo });
   }
   let flash = 0, flashColor = "#3dff9a", beltBurst = 0;
+  // the block's one coinbase: a miner astronaut that walks down and pilots the ship
+  function spawnMiner(){
+    const spawnX = geo.roadX0 + 16 + Math.random() * (geo.roadX1 - geo.roadX0 - 32);
+    people.push({
+      tx: { type: "base", vsize: 300, fee: 0, hash: "" },
+      type: TX_TYPES.base, size: 1.12, speed: 50 + Math.random()*22, spawnX,
+      x: spawnX, y: -30 - Math.random()*40,
+      phase: Math.random()*6.28, sway: Math.random()*6.28,
+      state: "walking", boards: true, miner: true,
+      cloakGoal: 0.4, cloak: 0, shards: [], targetBus: null, seat: 0,
+    });
+  }
   // recent blocks strip (coloured by mining algorithm)
   let recentBlocks = [];
   function pushRecentBlock(b){ recentBlocks.unshift(b); if (recentBlocks.length > 14) recentBlocks.pop(); renderRecentBlocks(); }
@@ -648,6 +683,7 @@
     stat.lastBlock += dt;
     if (!LIVE) { updateSpawner(dt); blockClock -= dt; if (blockClock <= 0) mineBlock(); }
 
+
     if (lightTimer > 0) { lightTimer -= dt; if (lightTimer <= 0) light = "red"; }
     gantryTimer += dt; if (gantryTimer > 3.6) { gantryTimer = 0; gantryIdx = (gantryIdx + 1) % gantrySub().length; }
 
@@ -685,6 +721,7 @@
         if (p.boards && boardingBus && p.y >= geo.boardY && boardingBus.passengers.length < 240) {
           p.state = "boarded"; p.targetBus = boardingBus;
           p.seat = boardingBus.passengers.length; boardingBus.passengers.push(p);
+          if (p.miner) boardingBus.hasPilot = true;         // the miner walked down and took the helm
           for (let k=0;k<8;k++) p.shards.push({ x: geo.laneC+(Math.random()-0.5)*24, y: geo.boardY-Math.random()*20,
             life:1, vx:(Math.random()-0.5)*0.8, vy:-(0.3+Math.random()*0.6), r:1+Math.random()*2 });
         }
@@ -933,16 +970,18 @@
     ctx.strokeStyle = hexA(oc,0.6); ctx.lineWidth = 1.4;
     ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.stroke();
     // tx passengers (boarded mempool txs) — little coloured heads behind the pilot
-    const seatMax = 10, seatN = Math.min(seatMax, b.passengers.length), cols = 5;
+    const pax = b.passengers.filter(p => !p.miner);   // miners are shown as the pilot, not extra heads
+    const seatMax = 10, seatN = Math.min(seatMax, pax.length), cols = 5;
     for (let i=0;i<seatN;i++){
-      const p = b.passengers[i], col = (TX_TYPES[p.tx.type] || TX_TYPES.base).color;
+      const p = pax[i], col = (TX_TYPES[p.tx.type] || TX_TYPES.base).color;
       const sx = cx - domeW*0.32 + (i%cols)*(domeW*0.64/(cols-1));
       const sy = domeCY + domeH*0.14 + Math.floor(i/cols)*(domeH*0.26);
       ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 5;
       ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
       ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-0.8, sy-0.8, 0.9, 0, 6.28); ctx.fill();
     }
-    // the coinbase astronaut — always at the helm, so every block shows its miner
+    // the coinbase astronaut — drawn only after a miner has walked down and boarded
+    if (b.hasPilot){
     const ax = cx, ay = domeCY - domeH*0.04, as = Math.max(2.6, domeW*0.088);
     // pickaxe over the shoulder (miner / staker): wooden handle + curved steel head
     const hgx = ax + as*1.7, hgy = ay + as*1.8;   // grip (lower right)
@@ -963,6 +1002,7 @@
     ctx.fillStyle = avg; ctx.beginPath(); ctx.ellipse(ax, ay+as*0.08, as*0.68, as*0.74, 0,0,6.28); ctx.fill();  // visor
     ctx.fillStyle = hexA(oc,0.9); ctx.shadowColor = oc; ctx.shadowBlur = 5;
     ctx.beginPath(); ctx.arc(ax-as*0.24, ay-as*0.12, as*0.2, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;         // visor glint
+    }
 
     // the real Veil logo, faded, watermarked on the hull (like a coin on the block car)
     if (veilLogo.complete && veilLogo.naturalWidth){
@@ -985,7 +1025,7 @@
 
     // labels
     const bh = b.blockHeight!=null ? b.blockHeight : stat.height+1;
-    const bt = b.blockTxcount!=null ? b.blockTxcount : (b.passengers.length + 1);   // +1 = the coinbase pilot
+    const bt = b.blockTxcount!=null ? b.blockTxcount : (b.passengers.filter(p=>!p.miner).length + (b.hasPilot?1:0));   // +pilot once boarded
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(233,226,255,0.9)"; ctx.font = "800 10px ui-monospace, monospace"; ctx.fillText("BLOCK", cx, y+h*0.66);
     ctx.fillStyle = oc; ctx.font = "800 12px ui-monospace, monospace"; ctx.fillText("#"+bh.toLocaleString(), cx, y+h*0.74);
@@ -1032,12 +1072,43 @@
       ctx.fillStyle = ag; ctx.beginPath(); ctx.arc(x, y, R, 0, 6.28); ctx.fill();
     }
 
-    drawBeing(x, y, s, step, tc, gl, time, p,
+    if (p.miner) drawAstronaut(x, y, s, step, time, p);
+    else drawBeing(x, y, s, step, tc, gl, time, p,
               p.type.key === "base" ? "human" : p.type.key === "stealth" ? "hybrid" : "alien");
 
     // size glyph for large tx
-    if (s > 1.35){ ctx.fillStyle = hexA(gl, 0.9); ctx.textAlign = "center";
+    if (s > 1.35 && !p.miner){ ctx.fillStyle = hexA(gl, 0.9); ctx.textAlign = "center";
       ctx.font = "700 8px ui-monospace, monospace"; ctx.fillText(fmtSize(p.tx.vsize), x, y-16*s); }
+  }
+
+  // coinbase miner — a walking astronaut with a pickaxe, heading down to the ship
+  function drawAstronaut(x, y, s, step, time, p){
+    const hy = y - 5*s, gl = "#ffe08a", tc = "#ffcf5a";
+    ctx.strokeStyle = "#b9c2d4"; ctx.lineWidth = 3*s; ctx.lineCap = "round";      // legs
+    ctx.beginPath(); ctx.moveTo(x-2.6*s, y+2*s); ctx.lineTo(x-3*s+step*3*s, y+9*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+2.6*s, y+2*s); ctx.lineTo(x+3*s-step*3*s, y+9*s); ctx.stroke();
+    // pickaxe over the shoulder — wooden handle + curved steel head
+    const hgx = x + 4.6*s, hgy = y + 5*s, hdx = x - 5*s, hdy = y - 8.5*s;
+    ctx.strokeStyle = "#9a6b3f"; ctx.lineWidth = 1.8*s;
+    ctx.beginPath(); ctx.moveTo(hgx, hgy); ctx.lineTo(hdx, hdy); ctx.stroke();
+    ctx.strokeStyle = "#d7deea"; ctx.lineWidth = 1.7*s;
+    ctx.beginPath(); ctx.moveTo(hdx-2.6*s, hdy+1.4*s); ctx.quadraticCurveTo(hdx, hdy-2*s, hdx+2.7*s, hdy-0.3*s); ctx.stroke();
+    ctx.fillStyle = hexA(gl,0.5); ctx.shadowColor = gl; ctx.shadowBlur = 8*s;       // thruster glow
+    ctx.beginPath(); ctx.arc(x, y+6.5*s, 1.6*s, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
+    const g = ctx.createLinearGradient(x, y-6*s, x, y+6*s);                          // suit
+    g.addColorStop(0, "#eef2f8"); g.addColorStop(1, "#9aa6bc");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y+1*s, 6.2*s, 7.6*s, 0, 0, 6.28); ctx.fill();
+    ctx.fillStyle = tc; roundRect(x-2*s, y+1*s, 4*s, 2.4*s, 0.8*s); ctx.fill();
+    ctx.strokeStyle = "#c7cfdf"; ctx.lineWidth = 3*s;                                // arms
+    ctx.beginPath(); ctx.moveTo(x-4.8*s, y-1*s); ctx.lineTo(x-7*s+step*2*s, y+3.4*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+4.8*s, y-1*s); ctx.lineTo(x+7*s-step*2*s, y+3.4*s); ctx.stroke();
+    ctx.fillStyle = "#eef2f8"; ctx.beginPath(); ctx.arc(x, hy+0.4*s, 4.8*s, 0, 6.28); ctx.fill();   // helmet
+    const vg = ctx.createLinearGradient(x-3*s, hy-2*s, x+3*s, hy+2*s);
+    vg.addColorStop(0, "#2a3550"); vg.addColorStop(1, "#0c1424");
+    ctx.fillStyle = vg; ctx.beginPath(); ctx.ellipse(x, hy+0.6*s, 3.4*s, 3.6*s, 0,0,6.28); ctx.fill();
+    ctx.fillStyle = hexA(gl,0.9); ctx.shadowColor = gl; ctx.shadowBlur = 6*s;
+    ctx.beginPath(); ctx.arc(x-1*s, hy-0.2*s, 0.9*s, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(x+1.2*s, hy+1.2*s, 0.5*s, 0,6.28); ctx.fill();
   }
 
   // one Veilian, three levels of alien-ness.  level: "human" | "hybrid" | "alien"
@@ -1181,24 +1252,6 @@
     ctx.textBaseline="alphabetic";
     ctx.restore();
 
-    // ---- little Veilian mascot waving by the Blockchain sign ----
-    const mx = geo.laneX0 + 14, ms = 1.55, my = geo.gantryY + 22 + Math.sin(time*2)*1.5;
-    const wave = Math.sin(time*6)*0.5;
-    ctx.fillStyle = "rgba(0,0,0,0.30)"; ctx.beginPath(); ctx.ellipse(mx, my+9*ms, 5*ms, 1.8*ms, 0,0,6.28); ctx.fill();
-    ctx.fillStyle = "#2f8f6a"; ctx.beginPath(); ctx.ellipse(mx, my+4*ms, 3.2*ms, 4*ms, 0,0,6.28); ctx.fill();
-    ctx.strokeStyle = "#2f8f6a"; ctx.lineWidth = 1.4*ms; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(mx-2.4*ms, my+2*ms); ctx.lineTo(mx-4.4*ms, my+4.5*ms); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(mx+2.4*ms, my+2*ms); ctx.lineTo(mx+5.2*ms, my-2*ms - wave*3*ms); ctx.stroke();   // waving arm
-    ctx.fillStyle = "#3dbb86"; ctx.beginPath(); ctx.ellipse(mx, my-2.6*ms, 4*ms, 4.6*ms, 0,0,6.28); ctx.fill();
-    ctx.strokeStyle = "#3dbb86"; ctx.lineWidth = 1*ms;
-    ctx.beginPath(); ctx.moveTo(mx-1.4*ms, my-6.4*ms); ctx.lineTo(mx-2.4*ms, my-9.4*ms); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(mx+1.4*ms, my-6.4*ms); ctx.lineTo(mx+2.4*ms, my-9.4*ms); ctx.stroke();
-    ctx.fillStyle = "#8ffff6"; ctx.shadowColor = "#8ffff6"; ctx.shadowBlur = 5;
-    ctx.beginPath(); ctx.arc(mx-2.4*ms, my-9.4*ms, 1*ms, 0,6.28); ctx.fill();
-    ctx.beginPath(); ctx.arc(mx+2.4*ms, my-9.4*ms, 1*ms, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
-    ctx.fillStyle = "#05030c";
-    ctx.save(); ctx.translate(mx-1.6*ms, my-2.6*ms); ctx.rotate(0.4); ctx.beginPath(); ctx.ellipse(0,0, 1*ms, 1.9*ms, 0,0,6.28); ctx.fill(); ctx.restore();
-    ctx.save(); ctx.translate(mx+1.6*ms, my-2.6*ms); ctx.rotate(-0.4); ctx.beginPath(); ctx.ellipse(0,0, 1*ms, 1.9*ms, 0,0,6.28); ctx.fill(); ctx.restore();
   }
 
   // ---------------------------------------------------------------------------
@@ -1268,7 +1321,7 @@
     recentTx = []; renderTxList();
     recentBlocks = []; renderRecentBlocks();  // drop simulated blocks
     people.length = 0;                        // remove the boot-seed Veilians so none stampede the ship
-    initBuses();                              // start live with a fresh, empty mothership
+    initBuses(); spawnMiner();                // fresh ship + its coinbase miner walking down
     blockClockSynced = false;                 // re-sync the "time since block" clock from the node
     if (!didRestore){ didRestore = true; restoreState(); }   // repopulate the sidebar from last session
   }
