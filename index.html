@@ -376,8 +376,9 @@
     geo.gantryY = H * 0.115;
     geo.marqueeY = H * 0.032;   // LAST BLOCK banner rides high, clear of where RingCT drop
     geo.lightY = H * 0.045;
-    // T-shaped clearing cut through the left bush field: Veilians land along the
-    // top bar, funnel down the stem, and the foot of the stem is the entrance.
+    // T-shaped clearing cut through the left bush field: Veilians arrive at their
+    // own origins (house / portal / random drop), funnel down the stem, and the
+    // foot of the stem meets the boarding stairs to the ship.
     const rw = geo.roadX1 - geo.roadX0;
     geo.tLeft  = geo.roadX0 + 4;
     geo.tRight = geo.roadX0 + rw * 0.64;
@@ -407,7 +408,7 @@
   window.addEventListener("resize", resize);
 
   // ---------------------------------------------------------------------------
-  // Scenery: scrolling hedges/clouds on the sidewalk, checker + dashes offset
+  // Scenery: drifting starfield + planets, bush field, space trees, lane dashes
   // ---------------------------------------------------------------------------
   let hedges = [], stars = [], planets = [], trees = [], bushes = [];
   // the T-shaped walking corridor cut through the left bush field
@@ -437,7 +438,7 @@
         ph: Math.random()*6.28, lean: -(0.16 + Math.random()*0.14) });
     }
     // left side: a dense bush field with a T-shaped clearing cut through it —
-    // Veilians land along the top bar and funnel down the stem to the entrance
+    // the corridor Veilians funnel down from their origins to the boarding stairs
     bushes = [];
     const bstep = 23;
     for (let by = -14; by < H + 34; by += bstep*0.86){   // full height; the bars/stem are cut out of it
@@ -531,7 +532,6 @@
     ctx.shadowColor = "#ffd678"; ctx.shadowBlur = 12;
     ctx.beginPath(); ctx.arc(mx, my - h/2 - 5, 4.6, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
   }
-  // the lower teleport gate — a second way onto the walkway
   // the basecoin house — the one arrival with an origin you can point at
   function drawHouse(time){
     const x = geo.houseX, y = geo.houseY, w = geo.houseW, h = geo.houseH;
@@ -1046,7 +1046,7 @@
         // materialise first, then start walking the avenue
         if (p.tp > 0) p.tp = Math.max(0, p.tp - dt * 1.7);
         if (p.climbing) {
-          // came up out of the mine (or the lower gate), then joins the corridor to the ship
+          // came up out of the mine (or the stealth ground portal), then joins the corridor to the ship
           p.y -= p.speed * rush * dt * 0.9;
           p.x += (p.climbX - p.x) * Math.min(1, dt * 2);
           if (p.y <= geo.mergeY0 + 6){ p.climbing = false; p.spawnX = p.x; }
@@ -1149,7 +1149,7 @@
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
     drawStairs(time);          // boarding stairs from the corridor up to the ship
-    drawGate(time);            // lower teleport gate — the second way in
+    drawGate(time);            // the stealth ground portal (cyan) near the bottom
 
     // ambient space debris behind actors: shards + drifting asteroids
     for (const p of ambient){
