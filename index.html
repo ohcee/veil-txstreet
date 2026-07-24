@@ -757,16 +757,30 @@
   // size (visual) is driven by transaction vsize — like TxStreet's Monero street,
   // since amounts are hidden on a privacy chain (RingCT/stealth).
   function sizeFromVsize(v){ return Math.max(0.72, Math.min(2.05, 0.5 + Math.log10(Math.max(120, v) / 120) * 0.62)); }
-  // RingCT teleports onto one of the twelve fixed ring pads (bottom bar), not just anywhere
-  function ringSpot(){ const s = geo.ringSpots; return s && s.length ? { ...s[(Math.random()*s.length)|0] } : randomDropPoint(); }
+  // Where a RingCT appears is itself untraceable: half the time it takes one of the
+  // twelve ring pads, otherwise it materialises at a random open spot in the scene.
+  function ringSpot(){
+    const s = geo.ringSpots;
+    if (s && s.length && Math.random() < 0.5){
+      const p = s[(Math.random()*s.length)|0];
+      return { x: p.x, y: p.y, direct: true };            // on the pads = walks the ring road
+    }
+    return randomDropPoint();
+  }
+  // a random open spot: either the small ring road, or anywhere the bush field is cut away
   function randomDropPoint(){
+    if (geo.ringRoadX && Math.random() < 0.4){            // somewhere along the ring road
+      const yA = geo.tBarY1 + 12, yB = geo.mergeY0 - 14;
+      return { x: geo.ringRoadX + (Math.random()-0.5)*(geo.ringRoadW - 14),
+               y: yA + Math.random() * Math.max(20, yB - yA), direct: true };
+    }
     const yTop = geo.marqueeY + 60, yBot = Math.min(geo.bBarY1, geo.mergeY0 - 30);   // clear of the banner overhead
-    for (let i = 0; i < 14; i++){
+    for (let i = 0; i < 16; i++){                          // anywhere in the open T corridor
       const x = geo.tLeft + 12 + Math.random() * Math.max(24, (geo.tRight - geo.tLeft) - 24);
       const y = yTop + Math.random() * Math.max(20, yBot - yTop);
-      if (inTClearing(x, y)) return { x, y };
+      if (inTClearing(x, y)) return { x, y, direct: false };
     }
-    return { x: geo.tStemC, y: geo.tBarY1 + 14 };
+    return { x: geo.tStemC, y: geo.tBarY1 + 14, direct: false };
   }
 
   // core factory — used by both the simulation and the live feed
@@ -805,7 +819,7 @@
       tp: (fresh && !viaHouse) ? 1 : 0,        // 1 = materialising; the house walker just opens a door
       // climb up to the corridor only when the arrival is BELOW the boarding merge
       climbing: (viaGate || viaDrop) && spawnY > geo.mergeY0, climbX: spawnX,
-      direct: viaDrop,                          // RingCT walks its own small road down, not the stem
+      direct: viaDrop && drop.direct,           // only ring-road arrivals skip the stem funnel
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
       state: "walking", boards: Math.random() < 0.92,
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
@@ -1462,7 +1476,10 @@
     }
 
     ctx.save();
-    if (tp > 0) ctx.globalAlpha = Math.min(1, (1 - tp) * 2.2);   // fade in as it lands
+    // RingCT is the fully shielded tier, so it cloaks down to a barely-there ghost once
+    // it lands — you can tell someone is walking, not who. cloak ramps 0→1 after arrival.
+    const ghost = p.type.key === "ringct" ? 1 - 0.76 * p.cloak : 1;
+    ctx.globalAlpha = (tp > 0 ? Math.min(1, (1 - tp) * 2.2) : 1) * ghost;   // fade in as it lands
     if (p.miner) drawAstronaut(x, y, s, step, time, p);
     // shapes: base = human. Stealth wears the cooler full-alien body, RingCT the hybrid
     // (the being shape is swapped from the privacy tiers; colour still marks the type).
@@ -1471,7 +1488,7 @@
     ctx.restore();
 
     // size glyph for large tx
-    if (s > 1.35 && !p.miner && tp <= 0){ ctx.fillStyle = hexA(gl, 0.9); ctx.textAlign = "center";
+    if (s > 1.35 && !p.miner && tp <= 0){ ctx.fillStyle = hexA(gl, 0.9 * ghost); ctx.textAlign = "center";
       ctx.font = "700 8px ui-monospace, monospace"; ctx.fillText(fmtSize(p.tx.vsize), x, y-16*s); }
   }
 
