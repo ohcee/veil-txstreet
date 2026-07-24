@@ -402,16 +402,11 @@
     // the door has to open ABOVE the merge line — below it, base would merge and
     // board on its first frame instead of ever being seen walking
     geo.houseY = geo.bBarY0 + 10 - geo.houseH * 0.5;
-    // RingCT teleports to one of TWELVE fixed pads — one per ring in the signature.
-    // Two columns of six, running vertically down a small road on the right side of the
-    // bush field (left of the median + ship). RingCT surfaces here, walks down, then cuts
-    // across to board — it doesn't funnel through the stem like the others.
+    // a small road down the right side of the bush field (left of the median + ship).
+    // RingCT can surface anywhere open; the ones that land on this road walk it down and
+    // cut across to board, instead of funnelling through the stem like the others.
     geo.ringRoadX = (geo.tRight + geo.roadX1) / 2;
     geo.ringRoadW = 34;
-    geo.ringSpots = [];
-    { const xC = geo.ringRoadX, yA = geo.tBarY1 + 12, yB = geo.mergeY0 - 8;
-      for (let row = 0; row < 6; row++) for (let col = 0; col < 2; col++)
-        geo.ringSpots.push({ x: xC + (col ? 11 : -11), y: yA + (yB - yA) * row / 5 }); }
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -583,26 +578,16 @@
     ctx.fillText("TRANSPARENT", x, ly);
     ctx.textBaseline = "alphabetic";
   }
-  // the twelve RingCT teleport pads — one per ring in the signature; a RingCT
-  // materialises on one of them, then walks the corridor down to the ship
-  function drawRingPads(time){
-    if (NARROW || !geo.ringSpots) return;
+  // the small road on the right of the bush field. No landing pads: a RingCT can
+  // surface anywhere open, so there is nothing fixed to mark.
+  function drawRingRoad(time){
+    if (NARROW || !geo.ringRoadX) return;
     const mag = "#d64bff";
-    // the small road the RingCT walk down, on the right side of the bushes
     const xC = geo.ringRoadX, yT = geo.tBarY1 + 2, yB = geo.mergeY0 + 4, rw = geo.ringRoadW;
     ctx.fillStyle = "rgba(18,12,32,0.6)"; roundRect(xC - rw/2, yT, rw, yB - yT, 7); ctx.fill();
     ctx.strokeStyle = hexA(mag, 0.16); ctx.lineWidth = 1; roundRect(xC - rw/2, yT, rw, yB - yT, 7); ctx.stroke();
     ctx.strokeStyle = hexA(mag, 0.22); ctx.lineWidth = 1.3; ctx.setLineDash([5, 8]);
     ctx.beginPath(); ctx.moveTo(xC, yT + 5); ctx.lineTo(xC, yB - 5); ctx.stroke(); ctx.setLineDash([]);
-    for (let i = 0; i < geo.ringSpots.length; i++){
-      const p = geo.ringSpots[i], pulse = 0.5 + 0.5*Math.sin(time*2 + i*0.6);
-      ctx.strokeStyle = hexA(mag, 0.26 + pulse*0.2); ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y, 9, 3.3, 0, 0, 6.28); ctx.stroke();
-      ctx.strokeStyle = hexA(mag, 0.12 + pulse*0.12); ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y, 5, 1.8, 0, 0, 6.28); ctx.stroke();
-      ctx.fillStyle = hexA(mag, 0.5 + pulse*0.3); ctx.shadowColor = mag; ctx.shadowBlur = 6;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 1, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
-    }
   }
   function drawGate(time){
     const gx = geo.gateX, gy = geo.gateY, w = 46, h = 16;
@@ -757,17 +742,8 @@
   // size (visual) is driven by transaction vsize — like TxStreet's Monero street,
   // since amounts are hidden on a privacy chain (RingCT/stealth).
   function sizeFromVsize(v){ return Math.max(0.72, Math.min(2.05, 0.5 + Math.log10(Math.max(120, v) / 120) * 0.62)); }
-  // Where a RingCT appears is itself untraceable: half the time it takes one of the
-  // twelve ring pads, otherwise it materialises at a random open spot in the scene.
-  function ringSpot(){
-    const s = geo.ringSpots;
-    if (s && s.length && Math.random() < 0.5){
-      const p = s[(Math.random()*s.length)|0];
-      return { x: p.x, y: p.y, direct: true };            // on the pads = walks the ring road
-    }
-    return randomDropPoint();
-  }
-  // a random open spot: either the small ring road, or anywhere the bush field is cut away
+  // Where a RingCT appears is itself untraceable — no fixed pads, just a random open
+  // spot: either the small ring road, or anywhere the bush field is cut away
   function randomDropPoint(){
     if (geo.ringRoadX && Math.random() < 0.4){            // somewhere along the ring road
       const yA = geo.tBarY1 + 12, yB = geo.mergeY0 - 14;
@@ -797,7 +773,7 @@
     const viaHouse = fresh && key === "base";
     const viaGate  = fresh && key === "stealth";
     const viaDrop  = fresh && key === "ringct";
-    const drop = viaDrop ? ringSpot() : null;
+    const drop = viaDrop ? randomDropPoint() : null;
     const spawnX = viaHouse ? geo.houseX + (Math.random()-0.5)*14
                  : viaGate  ? geo.gateX + (Math.random()-0.5)*18
                  : viaDrop  ? drop.x
@@ -1172,7 +1148,7 @@
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
     drawStairs(time);          // boarding stairs from the corridor up to the ship
-    drawRingPads(time);        // the twelve RingCT teleport pads across the top bar
+    drawRingRoad(time);        // the small road RingCT walks down, right of the bushes
     drawGate(time);            // the stealth ground portal (cyan) near the bottom
 
     // ambient space debris behind actors: shards + drifting asteroids
