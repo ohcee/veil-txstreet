@@ -389,9 +389,10 @@
     // the coinbase mine, dug into the lower bushes, with a shaft up to the bottom bar
     geo.mineX = geo.roadX0 + rw * 0.22;
     geo.mineY = geo.bBarY1 + H * 0.17;
-    // the ground portal near the bottom — where stealth surfaces
-    geo.gateX = geo.roadX0 + rw * 0.84;
-    geo.gateY = H * 0.80;
+    // the stealth portal — now up top in the corridor, where stealth surfaces and
+    // then walks the full way down (swapped with the RingCT pads)
+    geo.gateX = geo.tStemC;
+    geo.gateY = geo.tBarY1 - 6;
     // basecoin is the transparent tier, so it gets the one arrival you can trace:
     // it walks out the front door of a lit house. It sits at the left end of the
     // bottom bar — the top bar is spanned end to end by the gantry board.
@@ -401,6 +402,14 @@
     // the door has to open ABOVE the merge line — below it, base would merge and
     // board on its first frame instead of ever being seen walking
     geo.houseY = geo.bBarY0 + 10 - geo.houseH * 0.5;
+    // RingCT teleports to one of TWELVE fixed pads — one per ring in the signature.
+    // The special Veilians surface right by the ship: a 2×6 grid in the bottom bar,
+    // to the right of the house, above the merge so they still walk the final approach.
+    geo.ringSpots = [];
+    { const yA = geo.bBarY0 + 2, yB = geo.bBarY0 + (geo.mergeY0 - geo.bBarY0) * 0.6;
+      const xL = geo.houseX + geo.houseW * 0.85, xR = geo.tRight - 12;
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++)
+        geo.ringSpots.push({ x: xL + (xR - xL) * c / 5, y: r ? yB : yA }); }
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -521,6 +530,17 @@
     ctx.fillStyle = `rgba(255,214,120,${flick.toFixed(2)})`;
     ctx.shadowColor = "#ffd678"; ctx.shadowBlur = 12;
     ctx.beginPath(); ctx.arc(mx, my - h/2 - 5, 4.6, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+    // hanging "COINBASE MINE" sign so it's clear who climbs out here
+    const sy = my - h/2 - 24, sw = 82, sh = 16;
+    ctx.strokeStyle = "#6d5a3a"; ctx.lineWidth = 1.4;                          // two little chains
+    ctx.beginPath(); ctx.moveTo(mx - sw*0.34, my - h/2 - 4); ctx.lineTo(mx - sw*0.34, sy + sh); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(mx + sw*0.34, my - h/2 - 4); ctx.lineTo(mx + sw*0.34, sy + sh); ctx.stroke();
+    ctx.fillStyle = "#171022"; roundRect(mx - sw/2, sy, sw, sh, 3); ctx.fill();
+    ctx.strokeStyle = "#8a734a"; ctx.lineWidth = 1.6; roundRect(mx - sw/2, sy, sw, sh, 3); ctx.stroke();
+    ctx.fillStyle = "#ffcf5a"; ctx.font = "800 8.5px ui-monospace, monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("COINBASE MINE", mx, sy + sh/2 + 0.5);
+    ctx.textBaseline = "alphabetic";
   }
   // the basecoin house — the one arrival with an origin you can point at
   function drawHouse(time){
@@ -552,6 +572,29 @@
     ctx.fillStyle = sp;
     ctx.beginPath(); ctx.moveTo(dx+1, y0+h); ctx.lineTo(dx+dw-1, y0+h);
     ctx.lineTo(x+dw*1.5, y0+h+26); ctx.lineTo(x-dw*1.5, y0+h+26); ctx.closePath(); ctx.fill();
+    // label: this is the transparent (basecoin) house
+    const ly = y0 - h*0.42 - 13, lw = Math.max(78, w*1.05);
+    ctx.fillStyle = "#0e1526"; roundRect(x - lw/2, ly - 8, lw, 15, 3); ctx.fill();
+    ctx.strokeStyle = hexA(warm, 0.7); ctx.lineWidth = 1.3; roundRect(x - lw/2, ly - 8, lw, 15, 3); ctx.stroke();
+    ctx.fillStyle = warm; ctx.font = "800 8px ui-monospace, monospace";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("TRANSPARENT", x, ly);
+    ctx.textBaseline = "alphabetic";
+  }
+  // the twelve RingCT teleport pads — one per ring in the signature; a RingCT
+  // materialises on one of them, then walks the corridor down to the ship
+  function drawRingPads(time){
+    if (NARROW || !geo.ringSpots) return;
+    const mag = "#d64bff";
+    for (let i = 0; i < geo.ringSpots.length; i++){
+      const p = geo.ringSpots[i], pulse = 0.5 + 0.5*Math.sin(time*2 + i*0.6);
+      ctx.strokeStyle = hexA(mag, 0.26 + pulse*0.2); ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 9, 3.3, 0, 0, 6.28); ctx.stroke();
+      ctx.strokeStyle = hexA(mag, 0.12 + pulse*0.12); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 5, 1.8, 0, 0, 6.28); ctx.stroke();
+      ctx.fillStyle = hexA(mag, 0.5 + pulse*0.3); ctx.shadowColor = mag; ctx.shadowBlur = 6;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 1, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+    }
   }
   function drawGate(time){
     const gx = geo.gateX, gy = geo.gateY, w = 46, h = 16;
@@ -706,8 +749,8 @@
   // size (visual) is driven by transaction vsize — like TxStreet's Monero street,
   // since amounts are hidden on a privacy chain (RingCT/stealth).
   function sizeFromVsize(v){ return Math.max(0.72, Math.min(2.05, 0.5 + Math.log10(Math.max(120, v) / 120) * 0.62)); }
-  // RingCT uses no door — it materialises at a random point in the corridor. Kept
-  // above the merge so there is always some walk left to watch.
+  // RingCT teleports onto one of the twelve fixed ring pads (bottom bar), not just anywhere
+  function ringSpot(){ const s = geo.ringSpots; return s && s.length ? { ...s[(Math.random()*s.length)|0] } : randomDropPoint(); }
   function randomDropPoint(){
     const yTop = geo.marqueeY + 60, yBot = Math.min(geo.bBarY1, geo.mergeY0 - 30);   // clear of the banner overhead
     for (let i = 0; i < 14; i++){
@@ -732,11 +775,16 @@
     const viaHouse = fresh && key === "base";
     const viaGate  = fresh && key === "stealth";
     const viaDrop  = fresh && key === "ringct";
-    const drop = viaDrop ? randomDropPoint() : null;
+    const drop = viaDrop ? ringSpot() : null;
     const spawnX = viaHouse ? geo.houseX + (Math.random()-0.5)*14
                  : viaGate  ? geo.gateX + (Math.random()-0.5)*18
                  : viaDrop  ? drop.x
                  : geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20);
+    const spawnY = !fresh ? d.atY
+                 : viaHouse ? geo.houseY + geo.houseH*0.5 + 5
+                 : viaGate  ? geo.gateY + (Math.random()-0.5)*10
+                 : viaDrop  ? drop.y
+                            : geo.tBarY0 + Math.random() * (geo.tBarY1 - geo.tBarY0);
     const size = sizeFromVsize(tx.vsize);
     const feePriority = Math.min(1, (tx.fee || 0) / 0.0004);
     // deliberately slow so you can watch them cross; the shielded types amble the most
@@ -745,13 +793,10 @@
     const p = {
       tx, type, size, speed, spawnX,
       x: spawnX,
-      y: !fresh ? d.atY
-         : viaHouse ? geo.houseY + geo.houseH*0.5 + 5
-         : viaGate  ? geo.gateY + (Math.random()-0.5)*10
-         : viaDrop  ? drop.y
-                    : geo.tBarY0 + Math.random() * (geo.tBarY1 - geo.tBarY0),
+      y: spawnY,
       tp: (fresh && !viaHouse) ? 1 : 0,        // 1 = materialising; the house walker just opens a door
-      climbing: viaGate, climbX: geo.gateX,
+      // climb up to the corridor only when the arrival is BELOW the boarding merge
+      climbing: (viaGate || viaDrop) && spawnY > geo.mergeY0, climbX: spawnX,
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
       state: "walking", boards: Math.random() < 0.92,
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
@@ -1103,6 +1148,7 @@
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
     drawStairs(time);          // boarding stairs from the corridor up to the ship
+    drawRingPads(time);        // the twelve RingCT teleport pads across the top bar
     drawGate(time);            // the stealth ground portal (cyan) near the bottom
 
     // ambient space debris behind actors: shards + drifting asteroids
@@ -1482,6 +1528,14 @@
     ctx.fillStyle = hexA(gl,0.9); ctx.shadowColor = gl; ctx.shadowBlur = 6*s;
     ctx.beginPath(); ctx.arc(x-1*s, hy-0.2*s, 0.9*s, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
     ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(x+1.2*s, hy+1.2*s, 0.5*s, 0,6.28); ctx.fill();
+    // a gold coin bobbing at his side — he carries the block reward (coinbase)
+    const cx = x + 9.5*s, cy = y - 7*s + Math.sin(time*3 + p.sway)*1.8*s;
+    ctx.fillStyle = "#dfa62a"; ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 8*s;
+    ctx.beginPath(); ctx.arc(cx, cy, 4.4*s, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ffcf5a"; ctx.beginPath(); ctx.arc(cx, cy, 3.3*s, 0, 6.28); ctx.fill();
+    ctx.strokeStyle = "#8a5a00"; ctx.lineWidth = 0.9*s; ctx.lineCap = "round"; ctx.lineJoin = "round";  // Veil V struck on the coin
+    ctx.beginPath(); ctx.moveTo(cx-1.7*s, cy-1.1*s); ctx.lineTo(cx, cy+1.7*s); ctx.lineTo(cx+1.7*s, cy-1.1*s); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.beginPath(); ctx.arc(cx-1.5*s, cy-1.5*s, 0.8*s, 0, 6.28); ctx.fill();
   }
 
   // one Veilian, three levels of alien-ness.  level: "human" | "hybrid" | "alien"
