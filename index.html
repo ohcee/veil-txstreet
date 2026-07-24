@@ -691,8 +691,8 @@
           // above the merge, so it visibly re-walks the final approach and re-boards
           // the NEXT ship instead of teleport-boarding in place from below the line.
           c.state = "walking"; c.targetBus = null; c.seat = 0; c.boards = true; c.climbing = false;
-          c.x = geo.tStemC + (Math.random()-0.5)*geo.tStemW*0.5;
-          c.y = geo.mergeY0 - 16 - Math.random()*22;
+          c.x = geo.roadX1 - 6 + (Math.random()-0.5)*12;   // step off, back to the foot of the stairs
+          c.y = geo.mergeY0 + 6 + Math.random()*10;        // just below the merge, so it re-climbs and re-boards
           c.spawnX = c.x; c.tp = 0;
         } else c.state = "riding";
       }
