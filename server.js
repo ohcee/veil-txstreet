@@ -66,6 +66,11 @@ function fetchPrice() {
 }
 if (priceAuto) { fetchPrice(); setInterval(fetchPrice, 300000); }   // refresh every 5 min
 
+// Veil pays its monthly budget on a superblock every 43200 blocks (~30d at 60s).
+// There is no RPC for it — block explorers derive it from this same constant.
+const SUPERBLOCK_INTERVAL = 43200;
+const isSuperblock = h => h > 0 && h % SUPERBLOCK_INTERVAL === 0;
+
 // ---------------------------------------------------------------------------
 // shared state: an append-only ring buffer of {seq, kind, ...} events
 // ---------------------------------------------------------------------------
@@ -221,7 +226,7 @@ async function poll() {
             }
             known.delete(tid);
           });
-          push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000, txids });
+          push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000, txids, superblock: isSuperblock(h) });
         } catch (_) {}
       }
     }
@@ -232,6 +237,7 @@ async function poll() {
       difficulty: info.difficulty || 0,
       hashrate: mining ? (mining.networkhashps || 0) : 0,
       mempool: mem.size || 0, usd: usdPrice,
+      nextSuperblock: Math.ceil((height + 1) / SUPERBLOCK_INTERVAL) * SUPERBLOCK_INTERVAL,
       updated: Date.now(),
     };
 
