@@ -638,7 +638,22 @@
         if (m) { m.state = "riding"; m.targetBus = lead; if (!lead.passengers.includes(m)) lead.passengers.push(m); }
       }
       lead.state = "leaving"; lead.vy = -1.4;   // drive up toward the Blockchain sign
-      for (const c of lead.passengers) c.state = "riding";
+      // only ride along if the block actually took you. we can only judge that when the
+      // block's txid list is complete (the server caps it), otherwise assume everyone made it.
+      const accepted = (block && block.txids && block.txids.length &&
+                        (block.txcount == null || block.txcount <= block.txids.length))
+                       ? new Set(block.txids) : null;
+      for (const c of lead.passengers) {
+        const rejected = accepted && !c.miner && c.tx && c.tx.hash && !accepted.has(c.tx.hash);
+        if (rejected) {
+          // didn't make the block — step back out below the stairs and queue for the next one
+          c.state = "walking"; c.targetBus = null; c.seat = 0;
+          c.x = geo.laneC + (Math.random()-0.5)*44;
+          c.y = geo.boardY + 16 + Math.random()*22;
+          c.spawnX = c.x;
+        } else c.state = "riding";
+      }
+      lead.passengers = lead.passengers.filter(c => c.state === "riding");
     }
     light = "green"; lightTimer = 2.4;
     // next mothership warps in from downstream
@@ -961,7 +976,11 @@
           p.x += (p.climbX - p.x) * Math.min(1, dt * 2);
           if (p.y <= geo.mergeY0 + 6){ p.climbing = false; p.spawnX = p.x; }
         }
-        else if (!(p.tp > 0.45)) p.y += p.speed * rush * dt;
+        else if (!(p.tp > 0.45)) {
+          // boarders queue at the boarding line instead of wandering past the ship —
+          // this is where anyone the last block rejected waits for the next one
+          if (!(p.boards && p.y >= geo.boardY)) p.y += p.speed * rush * dt;
+        }
         // veil shard emission for shielded
         if (p.type.key !== "base" && Math.random() < dt * (p.type.key === "ringct" ? 7 : 3)) {
           p.shards.push({ x: p.x + (Math.random()-0.5)*16*p.size, y: p.y - 8*p.size,
@@ -1712,7 +1731,7 @@
       const set = new Set(ev.txids);
       for (const tx of recentTx) if (tx.bh == null && set.has(tx.hash)) tx.bh = ev.height;
     }
-    mineBlock({ height: ev.height, hash: ev.hash, txcount: ev.txcount, algo: ev.algo });
+    mineBlock({ height: ev.height, hash: ev.hash, txcount: ev.txcount, algo: ev.algo, txids: ev.txids });
   }
   async function pollFeed(){
     try {
