@@ -851,9 +851,6 @@
   function addTxToFeed(tx){ recentTx.unshift(tx); if (recentTx.length > 60) recentTx.pop(); renderTxList(); }
   function short(h,a=8,b=6){ return h.length>a+b ? h.slice(0,a)+"…"+h.slice(-b) : h; }
   // each block gets its own colour so its transactions are identifiable at a glance
-  const BLOCK_HUES = ["#7b9cff","#ff8ad4","#66e0a3","#ffc36b","#9d7bff","#4fd8e0","#ff7f7f"];
-  function blockColorFor(h){ return BLOCK_HUES[((h % BLOCK_HUES.length) + BLOCK_HUES.length) % BLOCK_HUES.length]; }
-
   function txRow(tx, barColor){
     const t = TX_TYPES[tx.type] || TX_TYPES.base;
     const elx = document.createElement("div");
@@ -898,10 +895,10 @@
     // blocks newest first, each followed by its transactions
     for (const b of recentBlocks){
       if (shown >= 60) break;
-      const col = blockColorFor(b.height || 0);
       const mine = rows.filter(tx => tx.bh === b.height);
       if (!mine.length && q) continue;                       // while searching, hide empty blocks
       const a = algoOf(b.algo);
+      const col = a.color;                                   // the block's own colour — the mining algo, same as its ship
       const ago = b.t ? Math.max(0, Math.round((Date.now() - b.t)/1000)) : null;
       const hdr = groupHeader("grp-block", col,
         `#${(b.height||0).toLocaleString()} <i style="color:${a.color}">${a.label}</i>`,
