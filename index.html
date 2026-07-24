@@ -1335,7 +1335,15 @@
       const p = pax[i], col = (TX_TYPES[p.tx.type] || TX_TYPES.base).color;
       const sx = cx - domeW*0.32 + (i%cols)*(domeW*0.64/(cols-1));
       const sy = domeCY + domeH*0.14 + Math.floor(i/cols)*(domeH*0.26);
-      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 5;
+      // little Veilian tentacles, waving in their own colour
+      const wob = Math.sin(time*3 + i*1.3)*0.7;
+      ctx.strokeStyle = col; ctx.lineWidth = 0.7; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(sx-1.1, sy-1.7); ctx.quadraticCurveTo(sx-1.9, sy-3.2, sx-1.5+wob, sy-4.1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx+1.1, sy-1.7); ctx.quadraticCurveTo(sx+1.9, sy-3.2, sx+1.5+wob, sy-4.1); ctx.stroke();
+      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 4;
+      ctx.beginPath(); ctx.arc(sx-1.5+wob, sy-4.1, 0.55, 0, 6.28); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx+1.5+wob, sy-4.1, 0.55, 0, 6.28); ctx.fill();
+      // the head
       ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
       ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-0.8, sy-0.8, 0.9, 0, 6.28); ctx.fill();
     }
