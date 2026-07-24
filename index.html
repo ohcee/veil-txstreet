@@ -1454,8 +1454,10 @@
     ctx.save();
     if (tp > 0) ctx.globalAlpha = Math.min(1, (1 - tp) * 2.2);   // fade in as it lands
     if (p.miner) drawAstronaut(x, y, s, step, time, p);
+    // shapes: base = human. Stealth wears the cooler full-alien body, RingCT the hybrid
+    // (the being shape is swapped from the privacy tiers; colour still marks the type).
     else drawBeing(x, y, s, step, tc, gl, time, p,
-              p.type.key === "base" ? "human" : p.type.key === "stealth" ? "hybrid" : "alien");
+              p.type.key === "base" ? "human" : p.type.key === "stealth" ? "alien" : "hybrid");
     ctx.restore();
 
     // size glyph for large tx
