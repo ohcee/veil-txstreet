@@ -766,7 +766,10 @@
 
   // core factory — used by both the simulation and the live feed
   function addPerson(d) {
-    const type = TX_TYPES[(d.type in TX_TYPES) ? d.type : "base"];
+    // d.reuseTx: respawn a walking being for a tx already in the feed (used on refresh
+    // so pending txs restart their walk) — don't mint a new tx or re-add the feed row
+    const tx = d.reuseTx || makeTxFromData(d);
+    const type = TX_TYPES[(tx.type in TX_TYPES) ? tx.type : "base"];
     // how a Veilian arrives is how traceable it is:
     //   base    — walks out of the house, origin in plain sight
     //   stealth — surfaces through the ground portal: you see the point, not the source
@@ -780,7 +783,6 @@
                  : viaGate  ? geo.gateX + (Math.random()-0.5)*18
                  : viaDrop  ? drop.x
                  : geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20);
-    const tx = makeTxFromData(d);
     const size = sizeFromVsize(tx.vsize);
     const feePriority = Math.min(1, (tx.fee || 0) / 0.0004);
     // deliberately slow so you can watch them cross; the shielded types amble the most
@@ -802,8 +804,7 @@
       cloak: 0, shards: [], targetBus: null, seat: 0,
     };
     people.push(p);
-    stat.typeCount[type.key]++;
-    addTxToFeed(tx);
+    if (!d.reuseTx){ stat.typeCount[type.key]++; addTxToFeed(tx); }   // a reused tx is already counted and in the feed
     return p;
   }
   // simulation spawner (used until a real feed connects)
@@ -1860,8 +1861,14 @@
       if (Array.isArray(s.recentTx)) { recentTx = s.recentTx; renderTxList(); }
       if (Array.isArray(s.recentBlocks)) { recentBlocks = s.recentBlocks; renderRecentBlocks(); }
       if (s.typeCount) stat.typeCount = s.typeCount;
+      if (typeof s.mempool === "number") stat.mempool = s.mempool;
       if (s.height) stat.height = Math.max(stat.height, s.height);
       if (s.lastAlgo) stat.lastAlgo = s.lastAlgo;
+      // the still-pending txs restart their walk on refresh, the same way the coinbase
+      // respawns and walks out of the mine — otherwise they'd sit in the feed with no
+      // Veilian actually crossing to the ship
+      const pend = recentTx.filter(tx => tx.bh == null).slice(0, Math.min(stat.mempool || 0, 30));
+      for (const tx of pend) addPerson({ reuseTx: tx });
     } catch (_) {}
   }
   function applyStats(s){
