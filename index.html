@@ -98,20 +98,12 @@
   .legend-row { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--text-dim); margin: 4px 0; }
   .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
 
-  .right-stack {
-    position: absolute; right: 10px; top: 10px; z-index: 5;
-    display: flex; flex-direction: column; gap: 10px; align-items: stretch;
+  /* recent-blocks strip, now pinned to the bottom of the Live Transactions sidebar */
+  .rb-foot {
+    border-top: 1px solid var(--border); padding: 10px 16px 12px;
+    background: rgba(10,6,20,0.4); text-align: center; flex: none;
   }
-  .block-timer {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-    padding: 10px 16px; text-align: center; backdrop-filter: blur(8px); min-width: 150px;
-  }
-  .bt-label { font-size: 8.5px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; }
-  .bt-value { font-size: 26px; font-weight: 800; color: var(--veil-cyan); margin: 2px 0; font-variant-numeric: tabular-nums; }
-  .bt-sub { font-size: 9px; color: var(--text-dim); letter-spacing: 0.5px; }
-  .bt-bar { height: 4px; background: rgba(123,47,214,0.25); border-radius: 3px; margin-top: 7px; overflow: hidden; }
-  .bt-fill { height: 100%; background: linear-gradient(90deg, var(--veil-purple-bright), var(--veil-cyan)); border-radius: 3px; width: 0%; }
-  .rb-title { font-size: 8px; letter-spacing: 1.6px; color: var(--text-faint); text-transform: uppercase; margin: 11px 0 6px; }
+  .rb-title { font-size: 8px; letter-spacing: 1.6px; color: var(--text-faint); text-transform: uppercase; margin: 0 0 6px; }
   .rb-chips { display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; min-height: 12px; }
   .rb-chip { width: 12px; height: 12px; border-radius: 3px; box-shadow: 0 0 6px currentColor; animation: rbin 0.35s ease; }
   @keyframes rbin { from { transform: scale(0.2); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -183,7 +175,7 @@
   .grp-block { cursor: pointer; transition: background 0.15s; }
   .grp-block:hover { background: rgba(123,47,214,0.18); }
   .grp-pending .grp-left { color: var(--veil-cyan); }
-  .tx-list { flex: 1; overflow-y: auto; padding: 6px 10px 14px; }
+  .tx-list { flex: 1; overflow-y: auto; padding: 8px 14px 12px; }
   .tx-list::-webkit-scrollbar { width: 6px; }
   .tx-list::-webkit-scrollbar-thumb { background: rgba(123,47,214,0.4); border-radius: 3px; }
   .tx {
@@ -218,9 +210,7 @@
     .stat { flex: 1 1 0; min-width: 0; padding: 5px 6px; text-align: center; }
     .stat-value { font-size: 12px; }
     .stat-label { font-size: 7px; letter-spacing: 0.8px; }
-    .right-stack { transform: scale(0.92); transform-origin: top right; }
-    .block-timer { padding: 6px 9px; min-width: 0; }
-    .rb-title, .rb-legend { display: none; }     /* keep just the algorithm chips */
+    /* the recent-blocks strip lives in the sidebar now, which is hidden on phones */
   }
 </style>
 </head>
@@ -249,19 +239,6 @@
 
   <div id="stage">
     <canvas id="scene"></canvas>
-
-    <div class="right-stack">
-      <div class="block-timer">
-        <div class="rb-title">Recent blocks · algorithm</div>
-        <div class="rb-chips" id="rbChips"></div>
-        <div class="rb-legend">
-          <span><i style="background:#3dff9a"></i>PoS</span>
-          <span><i style="background:#4da3ff"></i>ProgPoW</span>
-          <span><i style="background:#ffab3d"></i>RandomX</span>
-          <span><i style="background:#ff5d7a"></i>SHA256d</span>
-        </div>
-      </div>
-    </div>
 
     <div class="stats-pop" id="statsPop">
       <div class="sp-title">Transaction Types</div>
@@ -305,6 +282,16 @@
       <div class="side-hint">Click a tx to open it in the <b>Veil explorer&nbsp;↗</b></div>
     </div>
     <div class="tx-list" id="txList"></div>
+    <div class="rb-foot">
+      <div class="rb-title">Recent blocks · algorithm</div>
+      <div class="rb-chips" id="rbChips"></div>
+      <div class="rb-legend">
+        <span><i style="background:#3dff9a"></i>PoS</span>
+        <span><i style="background:#4da3ff"></i>ProgPoW</span>
+        <span><i style="background:#ffab3d"></i>RandomX</span>
+        <span><i style="background:#ff5d7a"></i>SHA256d</span>
+      </div>
+    </div>
   </aside>
 </div>
 
@@ -408,9 +395,9 @@
   window.addEventListener("resize", resize);
 
   // ---------------------------------------------------------------------------
-  // Scenery: drifting starfield + planets, bush field, space trees, lane dashes
+  // Scenery: drifting starfield + planets, bush field, lane dashes
   // ---------------------------------------------------------------------------
-  let hedges = [], stars = [], planets = [], trees = [], bushes = [];
+  let hedges = [], stars = [], planets = [], bushes = [];
   // the T-shaped walking corridor cut through the left bush field
   function inTClearing(x, y){
     const pad = 9;
@@ -428,14 +415,6 @@
       hedges.push({ y, x: geo.sidewalkX0 + Math.random() * (geo.sidewalkX1 - geo.sidewalkX0) * 0.4,
         r: 26 + Math.random() * 26, hue: Math.random() < 0.5 ? "#1f5a52" : "#2a3f7a", puffs: 4 + (Math.random()*3|0) });
       y += 70 + Math.random() * 60;
-    }
-    // strange space trees lining the walkway, leaning inward to funnel Veilians toward the ship
-    trees = [];
-    // right edge: a tall, dense tree line running the whole side
-    for (let ty = -50; ty < H + 100; ty += 58 + Math.random()*26){
-      trees.push({ x: geo.roadX1 - 6 + Math.random()*12, y: ty, s: 1.5 + Math.random()*0.85,
-        hue: Math.random() < 0.5 ? "#3dffc4" : "#9a6cff",
-        ph: Math.random()*6.28, lean: -(0.16 + Math.random()*0.14) });
     }
     // left side: a dense bush field with a T-shaped clearing cut through it —
     // the corridor Veilians funnel down from their origins to the boarding stairs
@@ -603,42 +582,6 @@
     ctx.beginPath(); ctx.moveTo(x0, y0 - 7); ctx.lineTo(x1, y1 - 7); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x0, y0 + 15); ctx.lineTo(x1, y1 + 15); ctx.stroke();
   }
-  // strange bioluminescent space trees lining the walkway
-  function drawSpaceTrees(time){ for (const t of trees) drawSpaceTree(t, time); }
-  function drawSpaceTree(t, time){
-    const s = t.s, sway = Math.sin(time*1.1 + t.ph) * 0.06;
-    const bx = t.x, by = t.y, h = 46*s;
-    const tipX = bx + Math.sin(t.lean + sway) * h * 0.55, tipY = by - h;
-    ctx.save();
-    // pooled glow at the base, lighting the path
-    const gg = ctx.createRadialGradient(bx, by, 1, bx, by, 15*s);
-    gg.addColorStop(0, hexA(t.hue, 0.22)); gg.addColorStop(1, hexA(t.hue, 0));
-    ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(bx, by, 15*s, 5*s, 0,0,6.28); ctx.fill();
-    // trunk — dark, tapering, with a glowing seam
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#241a3f"; ctx.lineWidth = 3.4*s;
-    ctx.beginPath(); ctx.moveTo(bx, by);
-    ctx.quadraticCurveTo(bx + (tipX-bx)*0.25, by - h*0.55, tipX, tipY); ctx.stroke();
-    ctx.strokeStyle = hexA(t.hue, 0.38); ctx.lineWidth = 1.1*s;
-    ctx.beginPath(); ctx.moveTo(bx, by);
-    ctx.quadraticCurveTo(bx + (tipX-bx)*0.25, by - h*0.55, tipX, tipY); ctx.stroke();
-    // drooping tendrils
-    ctx.strokeStyle = hexA(t.hue, 0.42); ctx.lineWidth = 1*s;
-    for (let i=-1;i<=1;i+=2){
-      ctx.beginPath(); ctx.moveTo(tipX + i*5*s, tipY + 2*s);
-      ctx.quadraticCurveTo(tipX + i*8.5*s, tipY + 10*s, tipX + i*5*s, tipY + 17*s); ctx.stroke();
-    }
-    // glowing canopy pods
-    ctx.shadowColor = t.hue; ctx.shadowBlur = 10*s;
-    for (let i=0;i<3;i++){
-      const a = -0.95 + i*0.95 + sway*2, r = (5.6 - i*0.95)*s;
-      ctx.fillStyle = hexA(t.hue, 0.78);
-      ctx.beginPath(); ctx.ellipse(tipX + Math.cos(a)*7*s, tipY + Math.sin(a)*5*s - 2*s, r, r*0.8, 0,0,6.28); ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-    ctx.restore();
-  }
-
   // ---------------------------------------------------------------------------
   // Buses (blocks)
   // ---------------------------------------------------------------------------
@@ -1145,7 +1088,7 @@
 
     drawSidewalk(time);
     drawRoad(time);
-    if (!NARROW){ drawBushes(time); drawMine(time); drawHouse(time); drawSpaceTrees(time); }  // bush field, mine, house + tree line
+    if (!NARROW){ drawBushes(time); drawMine(time); drawHouse(time); }  // bush field, mine + house
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
     drawStairs(time);          // boarding stairs from the corridor up to the ship
