@@ -403,13 +403,15 @@
     // board on its first frame instead of ever being seen walking
     geo.houseY = geo.bBarY0 + 10 - geo.houseH * 0.5;
     // RingCT teleports to one of TWELVE fixed pads — one per ring in the signature.
-    // The special Veilians surface right by the ship: a 2×6 grid in the bottom bar,
-    // to the right of the house, above the merge so they still walk the final approach.
+    // Two columns of six, running vertically down a small road on the right side of the
+    // bush field (left of the median + ship). RingCT surfaces here, walks down, then cuts
+    // across to board — it doesn't funnel through the stem like the others.
+    geo.ringRoadX = (geo.tRight + geo.roadX1) / 2;
+    geo.ringRoadW = 34;
     geo.ringSpots = [];
-    { const yA = geo.bBarY0 + 2, yB = geo.bBarY0 + (geo.mergeY0 - geo.bBarY0) * 0.6;
-      const xL = geo.houseX + geo.houseW * 0.85, xR = geo.tRight - 12;
-      for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++)
-        geo.ringSpots.push({ x: xL + (xR - xL) * c / 5, y: r ? yB : yA }); }
+    { const xC = geo.ringRoadX, yA = geo.tBarY1 + 12, yB = geo.mergeY0 - 8;
+      for (let row = 0; row < 6; row++) for (let col = 0; col < 2; col++)
+        geo.ringSpots.push({ x: xC + (col ? 11 : -11), y: yA + (yB - yA) * row / 5 }); }
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -586,6 +588,12 @@
   function drawRingPads(time){
     if (NARROW || !geo.ringSpots) return;
     const mag = "#d64bff";
+    // the small road the RingCT walk down, on the right side of the bushes
+    const xC = geo.ringRoadX, yT = geo.tBarY1 + 2, yB = geo.mergeY0 + 4, rw = geo.ringRoadW;
+    ctx.fillStyle = "rgba(18,12,32,0.6)"; roundRect(xC - rw/2, yT, rw, yB - yT, 7); ctx.fill();
+    ctx.strokeStyle = hexA(mag, 0.16); ctx.lineWidth = 1; roundRect(xC - rw/2, yT, rw, yB - yT, 7); ctx.stroke();
+    ctx.strokeStyle = hexA(mag, 0.22); ctx.lineWidth = 1.3; ctx.setLineDash([5, 8]);
+    ctx.beginPath(); ctx.moveTo(xC, yT + 5); ctx.lineTo(xC, yB - 5); ctx.stroke(); ctx.setLineDash([]);
     for (let i = 0; i < geo.ringSpots.length; i++){
       const p = geo.ringSpots[i], pulse = 0.5 + 0.5*Math.sin(time*2 + i*0.6);
       ctx.strokeStyle = hexA(mag, 0.26 + pulse*0.2); ctx.lineWidth = 1.4;
@@ -797,6 +805,7 @@
       tp: (fresh && !viaHouse) ? 1 : 0,        // 1 = materialising; the house walker just opens a door
       // climb up to the corridor only when the arrival is BELOW the boarding merge
       climbing: (viaGate || viaDrop) && spawnY > geo.mergeY0, climbX: spawnX,
+      direct: viaDrop,                          // RingCT walks its own small road down, not the stem
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
       state: "walking", boards: Math.random() < 0.92,
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
@@ -1061,7 +1070,8 @@
             life: 1, vx:(Math.random()-0.5)*0.4, vy:-(0.2+Math.random()*0.5), r: 1+Math.random()*2 });
         }
         // funnel out of the T's bar and down its stem toward the entrance
-        if (p.y > geo.tBarY1 && p.y < geo.mergeY0) {
+        // (RingCT skips this — it has its own small road down the right side)
+        if (!p.direct && p.y > geo.tBarY1 && p.y < geo.mergeY0) {
           p.x += (geo.tStemC - p.x) * Math.min(1, dt * 1.8);
           p.spawnX = p.x;                       // the later lane merge starts from here
         }
