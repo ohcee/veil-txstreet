@@ -238,6 +238,7 @@ async function poll() {
       hashrate: mining ? (mining.networkhashps || 0) : 0,
       mempool: mem.size || 0, usd: usdPrice,
       nextSuperblock: Math.ceil((height + 1) / SUPERBLOCK_INTERVAL) * SUPERBLOCK_INTERVAL,
+      bestHash: info.bestblockhash || "",   // the tip the next block builds on
       updated: Date.now(),
     };
 
