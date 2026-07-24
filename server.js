@@ -207,7 +207,7 @@ async function poll() {
           try { blk = await rpc("getblock", [hash, 2]); } catch (_) { blk = await rpc("getblock", [hash]); full = false; }
           const txs = blk.tx || [];
           // txids let the UI group the feed's transactions under the block that confirmed them
-          const txids = txs.slice(0, 60).map(t => (full ? (t.txid || t) : t));
+          const txids = txs.slice(0, 500).map(t => (full ? (t.txid || t) : t));  // complete list = the UI can reject boarded txs the block didn't take
           // anchor to when we SAW the block, not its self-reported timestamp: Veil stamps
           // can sit in the future (pinning the clock at 0) or lag arrival by ~a minute
           // (so it would never appear to reset). Arrival matches the ship launching.

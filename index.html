@@ -374,6 +374,7 @@
     geo.boardY = geo.busY + geo.busH * 0.28;
     geo.mergeY0 = geo.boardY - H * 0.08; // walk the T's stem, then cut right at its foot
     geo.gantryY = H * 0.115;
+    geo.marqueeY = H * 0.032;   // LAST BLOCK banner rides high, clear of where RingCT drop
     geo.lightY = H * 0.045;
     // T-shaped clearing cut through the left bush field: Veilians land along the
     // top bar, funnel down the stem, and the foot of the stem is the entrance.
@@ -686,11 +687,13 @@
       for (const c of lead.passengers) {
         const rejected = accepted && !c.miner && c.tx && c.tx.hash && !accepted.has(c.tx.hash);
         if (rejected) {
-          // didn't make the block — step back out below the stairs and queue for the next one
-          c.state = "walking"; c.targetBus = null; c.seat = 0;
-          c.x = geo.laneC + (Math.random()-0.5)*44;
-          c.y = geo.boardY + 16 + Math.random()*22;
-          c.spawnX = c.x;
+          // the block didn't take it: step off and go back to the foot of the stairs,
+          // above the merge, so it visibly re-walks the final approach and re-boards
+          // the NEXT ship instead of teleport-boarding in place from below the line.
+          c.state = "walking"; c.targetBus = null; c.seat = 0; c.boards = true; c.climbing = false;
+          c.x = geo.tStemC + (Math.random()-0.5)*geo.tStemW*0.5;
+          c.y = geo.mergeY0 - 16 - Math.random()*22;
+          c.spawnX = c.x; c.tp = 0;
         } else c.state = "riding";
       }
       lead.passengers = lead.passengers.filter(c => c.state === "riding");
@@ -752,7 +755,7 @@
   // RingCT uses no door — it materialises at a random point in the corridor. Kept
   // above the merge so there is always some walk left to watch.
   function randomDropPoint(){
-    const yTop = geo.tBarY0 + 6, yBot = Math.min(geo.bBarY1, geo.mergeY0 - 30);
+    const yTop = geo.marqueeY + 60, yBot = Math.min(geo.bBarY1, geo.mergeY0 - 30);   // clear of the banner overhead
     for (let i = 0; i < 14; i++){
       const x = geo.tLeft + 12 + Math.random() * Math.max(24, (geo.tRight - geo.tLeft) - 24);
       const y = yTop + Math.random() * Math.max(20, yBot - yTop);
@@ -1604,7 +1607,7 @@
     const urgent = late >= 5, warm = late >= 2.5, onTime = late < 1;   // < 1 == inside the 60s target;
     // Veil's real spacing swings from ~10s to ~2min, so LATE only past ~2.5min and OVERDUE past ~5min
     const pulse = warm ? 0.5 + 0.5*Math.sin(time * (urgent ? 7 : 4)) : 0;
-    const y = geo.gantryY + (urgent ? Math.sin(time*22) * Math.min(1.6, (late-2.5)*1.2) : 0);
+    const y = geo.marqueeY + (urgent ? Math.sin(time*22) * Math.min(1.6, (late-2.5)*1.2) : 0);
     const heroCol  = urgent ? "#ff5d5d" : warm ? "#ff9a3c" : onTime ? "#3dff9a" : "#ffcf5a";
     const heroGlow = urgent ? "#ff2e2e" : warm ? "#ff7a1a" : onTime ? "#3dff9a" : "#ffb03a";
     const heroBlur = urgent ? 12 + pulse*18 : warm ? 9 + pulse*9 : 8;
