@@ -247,6 +247,13 @@ async function poll() {
       nextSuperblock: Math.ceil((height + 1) / SUPERBLOCK_INTERVAL) * SUPERBLOCK_INTERVAL,
       bestHash: info.bestblockhash || "",   // the tip the next block builds on
       avgBlock: avgBlockSec,
+      // per-algorithm block counts over the same window, plus each algo's difficulty
+      algoMix: algoStats ? { pos: algoStats.pos || 0, progpow: algoStats.progpow || 0,
+                             randomx: algoStats.randomx || 0, sha256d: algoStats.sha256d || 0,
+                             blocks: (algoStats.endblock || 0) - (algoStats.startblock || 0),
+                             hours: (algoStats.finish - algoStats.start) / 3600 } : null,
+      diffs: { pos: info.difficulty_pos || 0, progpow: info.difficulty_progpow || 0,
+               randomx: info.difficulty_randomx || 0, sha256d: info.difficulty_sha256d || 0 },
       updated: Date.now(),
     };
 

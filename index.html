@@ -134,6 +134,14 @@
   .sp-title { font-size: 9px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; margin-bottom: 10px; }
   .sp-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin: 6px 0; }
   .sp-row b { color: var(--text); font-weight: 700; }
+  /* the algorithm mix, drawn as a squashed glowing "alien eye" donut */
+  .algo-eye { display: flex; justify-content: center; margin: 2px 0 6px; }
+  .algo-eye svg { width: 132px; height: 108px; overflow: visible; }
+  .algo-row { display: grid; grid-template-columns: 8px 1fr auto; align-items: center;
+    gap: 7px; font-size: 10px; color: var(--text-dim); margin: 3px 0; }
+  .algo-row i { width: 8px; height: 8px; border-radius: 2px; box-shadow: 0 0 6px currentColor; }
+  .algo-row b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .algo-row span.d { color: var(--text-faint); font-size: 9px; }
 
   .foot {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
@@ -252,7 +260,10 @@
       <div class="legend-row"><span class="legend-swatch" style="background:#22e0d6"></span> Stealth — one-time address</div>
       <div class="legend-row"><span class="legend-swatch" style="background:#d64bff"></span> RingCT — fully shielded</div>
       <div class="legend-row" style="margin:6px 0 12px;color:#6b628f;font-size:9px">Size = amount · Speed = fee priority</div>
-      <div class="sp-title">Network Detail</div>
+      <div class="sp-title">Algorithm Mix</div>
+      <div class="algo-eye"><svg id="algoPie" viewBox="0 0 120 120"></svg></div>
+      <div id="algoRows"></div>
+      <div class="sp-title" style="margin-top:12px">Network Detail</div>
       <div class="sp-row">Consensus <b>3 PoW algos + PoS</b></div>
       <div class="sp-row">Block time <b>~60 s</b></div>
       <div class="sp-row">Median fee <b id="sp-fee">—</b></div>
@@ -905,7 +916,10 @@
   // fee in USD when a price is known, else fall back to µVEIL
   function fmtFee(feeVeil){ const p = stat.usd||0; return p>0 ? fmtUsd(feeVeil*p) : fmtFeeShort(feeVeil); }
   function fmtHashrate(h){ const u=["H/s","kH/s","MH/s","GH/s","TH/s","PH/s"]; let i=0; while(h>=1000&&i<u.length-1){h/=1000;i++;} return h.toFixed(h<10?2:1)+" "+u[i]; }
-  function fmtDiff(d){ if(d>=1e12)return(d/1e12).toFixed(2)+"T"; if(d>=1e9)return(d/1e9).toFixed(2)+"G"; if(d>=1e6)return(d/1e6).toFixed(2)+"M"; if(d>=1e3)return(d/1e3).toFixed(1)+"k"; return (d||0).toFixed(1); }
+  function fmtDiff(d){ if(d>=1e12)return(d/1e12).toFixed(2)+"T"; if(d>=1e9)return(d/1e9).toFixed(2)+"G"; if(d>=1e6)return(d/1e6).toFixed(2)+"M"; if(d>=1e3)return(d/1e3).toFixed(1)+"k";
+    // RandomX difficulty sits below 1 — one decimal would render it a flat "0.0"
+    if(d>0 && d<1) return d.toFixed(Math.min(6, 2 - Math.floor(Math.log10(d))));
+    return (d||0).toFixed(1); }
   function medianOf(a){ if(!a.length)return 0; const s=[...a].sort((x,y)=>x-y),m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
   function hexA(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
 
@@ -949,6 +963,52 @@
     el.spStealth.textContent = c.stealth.toLocaleString();
     el.spRingct.textContent = c.ringct.toLocaleString();
     el.spPriv.textContent = (privacyRatio()*100).toFixed(1) + "%";
+    renderAlgoEye();
+  }
+  // The algorithm mix as a glowing alien eye: a squashed donut whose arcs are the share
+  // of blocks each algo won, with its difficulty listed beside it.
+  const ALGO_ORDER = ["pos", "progpow", "randomx", "sha256d"];
+  function renderAlgoEye(){
+    const svg = document.getElementById("algoPie"), rows = document.getElementById("algoRows");
+    if (!svg || !rows) return;
+    const mix = stat.algoMix, diffs = stat.diffs || {};
+    const counts = ALGO_ORDER.map(k => (mix && mix[k]) || 0);
+    const total = counts.reduce((a,b) => a+b, 0);
+    if (!total){ svg.innerHTML = ""; rows.innerHTML =
+      `<div class="algo-row" style="grid-column:1/-1;color:var(--text-faint)">waiting for the node…</div>`; return; }
+
+    const cx = 60, cy = 58, r = 34, C = 2*Math.PI*r;
+    let off = 0, arcs = "";
+    ALGO_ORDER.forEach((k, i) => {
+      const frac = counts[i] / total;
+      if (frac <= 0) return;
+      const col = algoOf(k).color, len = frac * C;
+      arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="15"
+                 stroke-dasharray="${len.toFixed(2)} ${(C-len).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"
+                 transform="rotate(-90 ${cx} ${cy})" opacity="0.92"
+                 style="filter:drop-shadow(0 0 5px ${col})"></circle>`;
+      off += len;
+    });
+    // the eye: squashed vertically like a UFO dome, dark pupil in the middle
+    svg.innerHTML = `
+      <g transform="translate(0 ${cy*0.22}) scale(1 0.78)">
+        <ellipse cx="${cx}" cy="${cy}" rx="${r+11}" ry="${r+11}" fill="rgba(123,47,214,0.07)"></ellipse>
+        ${arcs}
+        <circle cx="${cx}" cy="${cy}" r="${r-9}" fill="#08050f" stroke="rgba(123,47,214,0.5)" stroke-width="1"></circle>
+        <ellipse cx="${cx-6}" cy="${cy-7}" rx="6" ry="4" fill="rgba(255,255,255,0.10)"></ellipse>
+      </g>
+      <text x="${cx}" y="${cy+2}" text-anchor="middle" fill="#e9e2ff"
+            style="font:800 15px ui-monospace,monospace">${total.toLocaleString()}</text>
+      <text x="${cx}" y="${cy+15}" text-anchor="middle" fill="#6b628f"
+            style="font:700 7.5px ui-monospace,monospace">BLOCKS · ${mix.hours ? mix.hours.toFixed(0)+"H" : ""}</text>`;
+
+    rows.innerHTML = ALGO_ORDER.map((k, i) => {
+      const a = algoOf(k), pct = (counts[i]/total*100);
+      const d = diffs[k];
+      return `<div class="algo-row"><i style="background:${a.color};color:${a.color}"></i>
+        <span>${a.label}<span class="d">  diff ${d ? fmtDiff(d) : "—"}</span></span>
+        <b>${pct.toFixed(1)}%</b></div>`;
+    }).join("");
   }
   setInterval(() => {
     if (LIVE) return;                       // node supplies these when live
@@ -1925,6 +1985,8 @@
     stat.network = s.network || stat.network;
     if (s.bestHash) stat.bestHash = s.bestHash;                 // tip hash for the waiting ship's plate
     if (typeof s.avgBlock === "number") stat.avgBlock = s.avgBlock;
+    if (s.algoMix) stat.algoMix = s.algoMix;
+    if (s.diffs) stat.diffs = s.diffs;
     if (typeof s.usd === "number"){ const had = stat.usd>0; stat.usd = s.usd; if (!had && stat.usd>0) renderTxList(); }   // re-price fees once known
     if (el.chainNet) el.chainNet.textContent = (s.network==="mock" ? "mock feed" : (s.network||"mainnet")) + " · privacy L1";
     if (feedMode === "live"){
