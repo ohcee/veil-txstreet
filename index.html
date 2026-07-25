@@ -565,12 +565,12 @@
     ctx.beginPath(); ctx.moveTo(dx+1, y0+h); ctx.lineTo(dx+dw-1, y0+h);
     ctx.lineTo(x+dw*1.5, y0+h+26); ctx.lineTo(x-dw*1.5, y0+h+26); ctx.closePath(); ctx.fill();
     // label: this is the transparent (basecoin) house
-    const ly = y0 - h*0.42 - 13, lw = Math.max(78, w*1.05);
+    const ly = y0 - h*0.42 - 13, lw = Math.max(112, w*1.5);
     ctx.fillStyle = "#0e1526"; roundRect(x - lw/2, ly - 8, lw, 15, 3); ctx.fill();
     ctx.strokeStyle = hexA(warm, 0.7); ctx.lineWidth = 1.3; roundRect(x - lw/2, ly - 8, lw, 15, 3); ctx.stroke();
-    ctx.fillStyle = warm; ctx.font = "800 8px ui-monospace, monospace";
+    ctx.fillStyle = warm; ctx.font = "800 7px ui-monospace, monospace";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("TRANSPARENT", x, ly);
+    ctx.fillText("THE TRANSPARENT HOUSE", x, ly);
     ctx.textBaseline = "alphabetic";
   }
   function drawGate(time){
@@ -678,10 +678,12 @@
     blockClock = BLOCK_TIME;
     beltBurst = 1.6;                 // the walkway surges forward as the block lands
     flash = 1; flashColor = algoOf(algo).color;
+    foundTimer = 4;                  // light the BLOCK FOUND sign
     pushRecentBlock({ height: (block ? block.height : stat.height), algo,
       txcount: block && block.txcount != null ? block.txcount : null, t: Date.now() });
   }
   let flash = 0, flashColor = "#3dff9a", beltBurst = 0;
+  let foundTimer = 0;          // BLOCK FOUND sign stays lit for a few seconds after a block lands
   // Veil pays its monthly budget out on a superblock every 43200 blocks (~30 days at
   // 60s). The node exposes no RPC for it, so derive it the way the explorers do.
   const SUPERBLOCK_INTERVAL = 43200;
@@ -954,16 +956,34 @@
     stat.difficulty = Math.max(1e5, stat.difficulty + (Math.random()-0.5)*8000);
   }, 1500);
 
+  // The node's own chain-wide figure (getchainalgostats, ~25h of blocks) — accurate in a
+  // way timing arrivals here never is: that drifts with poll latency and closed tabs.
+  // Falls back to measuring arrivals only if the node hasn't reported one yet.
+  function avgBlockTime(){
+    if (stat.avgBlock > 0) return stat.avgBlock;
+    const ts = recentBlocks.map(b => b.t).filter(Boolean);   // newest first
+    let sum = 0, n = 0;
+    for (let i = 0; i + 1 < ts.length; i++){
+      const gap = (ts[i] - ts[i+1]) / 1000;
+      if (gap > 0 && gap < 900){ sum += gap; n++; }
+    }
+    return n ? sum / n : 0;
+  }
   // gantry sub-line (rotates under the live block clock)
-  const gantrySub = () => ([
-    "BUILT PRIVATE · BUILT TO LAST",
-    "PRIVACY RATIO  " + (privacyRatio()*100).toFixed(0) + "%",
-    "BLOCK  #" + (stat.height).toLocaleString(),
-    "MEMPOOL  " + stat.mempool + " TX",
-    (nextSuperblock() - stat.height <= 1 ? "\u2605 SUPERBLOCK \u00b7 BUDGET PAYOUT"
-                                         : "SUPERBLOCK IN  " + (nextSuperblock() - stat.height).toLocaleString()),
-    "TRUE FINANCIAL PRIVACY",
-  ]);
+  const gantrySub = () => {
+    const avg = avgBlockTime();
+    return [
+      "BUILT PRIVATE \u00b7 BUILT TO LAST",
+      "PRIVACY RATIO  " + (privacyRatio()*100).toFixed(0) + "%",
+      "BLOCK  #" + (stat.height).toLocaleString(),
+      (avg ? "AVG BLOCK  " + (avg < 100 ? avg.toFixed(1) : Math.round(avg)) + "s"
+           : "TARGET BLOCK  " + BLOCK_TIME + "s"),
+      "MEMPOOL  " + stat.mempool + " TX",
+      (nextSuperblock() - stat.height <= 1 ? "\u2605 SUPERBLOCK \u00b7 BUDGET PAYOUT"
+                                           : "SUPERBLOCK IN  " + (nextSuperblock() - stat.height).toLocaleString()),
+      "TRUE FINANCIAL PRIVACY",
+    ];
+  };
   let gantryIdx = 0, gantryTimer = 0;
 
   // ---------------------------------------------------------------------------
@@ -1072,6 +1092,7 @@
 
     updateAmbient(dt);
     if (flash > 0) flash = Math.max(0, flash - dt * 1.6);
+    if (foundTimer > 0) foundTimer = Math.max(0, foundTimer - dt);
   }
   function ease(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
 
@@ -1764,6 +1785,24 @@
       ctx.beginPath(); ctx.arc(x, ly, 7.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
       if (on){ ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(x-2.2, ly-2.2, 2.2, 0, 6.28); ctx.fill(); }
     }
+    // "BLOCK FOUND" marquee above the Blockchain sign — dark until a block lands
+    const fx = geo.laneC, fw = 124, fh = 24, fy = geo.gantryY - 42;
+    const fOn = foundTimer > 0;
+    const blinkOn = fOn && (foundTimer > 3.2 || Math.sin(foundTimer * 14) > -0.35);   // flicker, then hold
+    const fcol = "#ffcf5a";
+    ctx.fillStyle = fOn ? "#241803" : "#0d0a18";
+    roundRect(fx - fw/2, fy, fw, fh, 5); ctx.fill();
+    ctx.strokeStyle = fOn && blinkOn ? hexA(fcol, 0.95) : "rgba(90,80,130,0.35)";
+    ctx.lineWidth = fOn ? 2 : 1.2;
+    if (fOn && blinkOn){ ctx.shadowColor = fcol; ctx.shadowBlur = 16; }
+    roundRect(fx - fw/2, fy, fw, fh, 5); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "900 12px ui-monospace, monospace";
+    if (fOn && blinkOn){ ctx.fillStyle = fcol; ctx.shadowColor = fcol; ctx.shadowBlur = 12; }
+    else ctx.fillStyle = "rgba(120,110,160,0.30)";                 // unlit bulbs, still legible
+    ctx.fillText("BLOCK FOUND", fx, fy + fh/2 + 0.5);
+    ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
+
     // big green "Blockchain" sign (arrow above the word) at the head of the lane
     const sx = geo.laneC, sy = geo.gantryY - 8, sw = 112, sh = 46;
     ctx.strokeStyle="#2a1c48"; ctx.lineWidth=4;
@@ -1885,6 +1924,7 @@
     if (!s) return;
     stat.network = s.network || stat.network;
     if (s.bestHash) stat.bestHash = s.bestHash;                 // tip hash for the waiting ship's plate
+    if (typeof s.avgBlock === "number") stat.avgBlock = s.avgBlock;
     if (typeof s.usd === "number"){ const had = stat.usd>0; stat.usd = s.usd; if (!had && stat.usd>0) renderTxList(); }   // re-price fees once known
     if (el.chainNet) el.chainNet.textContent = (s.network==="mock" ? "mock feed" : (s.network||"mainnet")) + " · privacy L1";
     if (feedMode === "live"){

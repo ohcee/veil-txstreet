@@ -77,6 +77,7 @@ const isSuperblock = h => h > 0 && h % SUPERBLOCK_INTERVAL === 0;
 let seq = 0;
 const MAX_EVENTS = 3000;
 const events = [];
+let avgBlockSec = 0;      // chain-wide mean block spacing, from getchainalgostats
 let stats = { mode: "offline", network: "veil", height: 0, difficulty: 0, hashrate: 0, mempool: 0, usd: 0, updated: Date.now() };
 
 function push(ev) {
@@ -191,6 +192,12 @@ async function poll() {
     const mining = await rpc("getmininginfo").catch(() => null);
     const mem = await rpc("getmempoolinfo").catch(() => ({ size: 0 }));
     const height = info.blocks;
+    // Veil ships a chain-wide algo/timing summary — a far better average than timing
+    // arrivals ourselves (that measure drifts with poll latency and closed tabs)
+    let algoStats = null;
+    try { algoStats = await rpc("getchainalgostats", []); } catch (_) {}
+    if (algoStats && algoStats.endblock > algoStats.startblock && algoStats.finish > algoStats.start)
+      avgBlockSec = (algoStats.finish - algoStats.start) / (algoStats.endblock - algoStats.startblock);
 
     // first poll: learn the tip block time so "time since block" survives a refresh
     if (lastHeight === null) {
@@ -239,6 +246,7 @@ async function poll() {
       mempool: mem.size || 0, usd: usdPrice,
       nextSuperblock: Math.ceil((height + 1) / SUPERBLOCK_INTERVAL) * SUPERBLOCK_INTERVAL,
       bestHash: info.bestblockhash || "",   // the tip the next block builds on
+      avgBlock: avgBlockSec,
       updated: Date.now(),
     };
 
