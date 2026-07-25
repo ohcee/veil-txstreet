@@ -231,6 +231,7 @@
   .side-hint b { color: var(--veil-cyan); font-weight: 700; }
 
   @media (max-width: 900px) {
+    .foot, .stats-chip, .stats-pop { display: none; }   /* phones: just the basics */
     #app { grid-template-columns: 1fr; grid-template-areas: "nav" "stage"; }
     aside { display: none; }
     nav { flex-wrap: wrap; gap: 6px 10px; padding: 8px 12px; }
@@ -1264,7 +1265,7 @@
     const order = people.slice().sort((a,c)=>a.y-c.y);
     for (const p of order) drawPerson(p, time);
 
-    drawGantry(time);
+    if (!NARROW) drawGantry(time);      // phones keep only the ship, walkers and lane
     drawStoplight(time);
 
     if (flash > 0){ ctx.fillStyle = hexA(flashColor, flash*0.14); ctx.fillRect(0,0,W,H); }
@@ -1468,9 +1469,11 @@
     const bh = b.blockHeight!=null ? b.blockHeight : stat.height+1;
     const bt = b.blockTxcount!=null ? b.blockTxcount : (b.passengers.filter(p=>!p.miner).length + (b.hasPilot?1:0));   // +pilot once boarded
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(233,226,255,0.9)"; ctx.font = "800 10px ui-monospace, monospace"; ctx.fillText("BLOCK", cx, y+h*0.64);
-    ctx.fillStyle = oc; ctx.font = "800 12px ui-monospace, monospace"; ctx.fillText("#"+bh.toLocaleString(), cx, y+h*0.72);
-    ctx.fillStyle = "rgba(233,226,255,0.6)"; ctx.font = "700 9px ui-monospace, monospace"; ctx.fillText(bt+" tx", cx, y+h*0.79);
+    const lblW = w * 0.88;                       // the hull is only so wide
+    ctx.fillStyle = "rgba(233,226,255,0.9)"; fitFont("BLOCK", 10, "800", lblW); ctx.fillText("BLOCK", cx, y+h*0.64);
+    const hTxt = "#"+bh.toLocaleString();
+    ctx.fillStyle = oc; fitFont(hTxt, 12, "800", lblW); ctx.fillText(hTxt, cx, y+h*0.72);
+    ctx.fillStyle = "rgba(233,226,255,0.6)"; fitFont(bt+" tx", 9, "700", lblW); ctx.fillText(bt+" tx", cx, y+h*0.79);
     // hash stencilled on the rear: a launched ship carries its own block's hash;
     // a ship still forming the next block shows the best (tip) hash it builds on
     const rearHash = b.blockHash || (isLead ? stat.bestHash : "");
@@ -1758,19 +1761,12 @@
     const hero = LIVE ? ("LAST BLOCK · " + Math.floor(Math.max(0, stat.lastBlock)) + "s AGO" + tag)
                       : ("NEXT BLOCK · " + Math.ceil(Math.max(0, blockClock)) + "s");
     ctx.fillStyle = heroCol; ctx.shadowColor = heroGlow; ctx.shadowBlur = heroBlur;
-    // shrink to fit: on a phone the board is far narrower than this text wants to be
-    const fitFont = (txt, px, weight) => {
-      for (let sz = px; sz >= 7; sz--){
-        ctx.font = weight + " " + sz + "px ui-monospace, monospace";
-        if (ctx.measureText(txt).width <= w - 14) return;
-      }
-    };
-    fitFont(hero, urgent ? 18 : 17, "800");
+    fitFont(hero, urgent ? 18 : 17, "800", w - 14);
     ctx.fillText(hero, cxm, y+17);
     // sub line — rotating flavor
     const sub = gantrySub()[gantryIdx % gantrySub().length];
     ctx.fillStyle = "#22e0d6"; ctx.shadowColor = "#22e0d6"; ctx.shadowBlur = 6;
-    fitFont(sub, 11, "700");
+    fitFont(sub, 11, "700", w - 14);
     ctx.fillText(sub, cxm, y+37);
     ctx.restore();
     ctx.shadowBlur = 0;
@@ -1782,8 +1778,8 @@
 
   // ---- stoplight + Blockchain sign at top of lane ----
   function drawStoplight(time){
-    // on phones the lane is narrow, so drop the whole rig below the Blockchain sign
-    const x = geo.laneX0 - 6, y = NARROW ? geo.gantryY + 58 : geo.lightY;
+    const x = geo.laneX0 - 6, y = geo.lightY;
+    if (!NARROW) {
     // ---- the rig: a signal housing on a pole, held up by the Veilian mascot ----
     const green = light === "green", lit = green ? "#3dff9a" : "#ff4d6d";
     const hw = 26, hh = 52, poleY0 = y + hh, poleY1 = y + hh + 40;
@@ -1903,6 +1899,7 @@
     ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
     }
 
+    }
     // big green "Blockchain" sign (arrow above the word) at the head of the lane
     const sx = geo.laneC, sy = geo.gantryY - 8, sw = 112, sh = 46;
     ctx.strokeStyle="#2a1c48"; ctx.lineWidth=4;
@@ -1924,6 +1921,13 @@
   }
 
   // ---------------------------------------------------------------------------
+  // shrink a font until the text fits maxW — phone widths squeeze these labels hard
+  function fitFont(txt, px, weight, maxW){
+    for (let sz = px; sz >= 6; sz--){
+      ctx.font = weight + " " + sz + "px ui-monospace, monospace";
+      if (ctx.measureText(txt).width <= maxW) break;
+    }
+  }
   function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
     ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
   function shade(hex,amt){ const n=parseInt(hex.slice(1),16); let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
