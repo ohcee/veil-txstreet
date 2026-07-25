@@ -137,21 +137,27 @@
   .sp-row b { color: var(--text); font-weight: 700; }
   /* algorithm mix: floats in the band between the runway and the transactions panel */
   .algo-panel {
-    position: absolute; top: 14px; z-index: 9; width: 138px;
+    position: absolute; top: 14px; bottom: 14px; z-index: 9;
+    /* spans the whole empty band: from the end of the street to the transactions panel */
+    left: calc(var(--gutter) + (100vw - 2 * var(--gutter)) * 0.60 + 14px);
     right: calc(var(--gutter) + 8px + var(--tx-panel-w) + 12px);
     background: rgba(6,4,13,0.5); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
-    border: 1px solid var(--border); border-radius: 12px; padding: 10px 9px 11px;
+    border: 1px solid var(--border); border-radius: 12px; padding: 12px 11px 14px;
+    display: flex; flex-direction: column; overflow: hidden;
   }
-  .algo-panel .sp-title { margin-bottom: 6px; text-align: center; }
+  .algo-panel .sp-title { margin-bottom: 8px; text-align: center; font-size: 10px; }
+  .algo-foot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
+  .algo-foot .sp-row { font-size: 11px; margin: 5px 0; }
   @media (max-width: 1180px) { .algo-panel { display: none; } }
   /* the algorithm mix, drawn as a squashed glowing "alien eye" donut */
-  .algo-eye { display: flex; justify-content: center; margin: 2px 0 6px; }
-  .algo-eye svg { width: 132px; height: 108px; overflow: visible; }
-  .algo-row { display: grid; grid-template-columns: 8px 1fr auto; align-items: center;
-    gap: 6px; font-size: 10px; color: var(--text-dim); margin: 5px 0 0; white-space: nowrap; }
-  .algo-row i { width: 8px; height: 8px; border-radius: 2px; box-shadow: 0 0 6px currentColor; }
-  .algo-row b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .algo-d { font-size: 8.5px; color: var(--text-faint); margin: 1px 0 0 14px;
+  .algo-eye { display: flex; justify-content: center; margin: 0 0 4px; flex: none; }
+  .algo-eye svg { width: 100%; max-width: 190px; height: auto; overflow: visible; }
+  #algoRows { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; min-height: 0; }
+  .algo-row { display: grid; grid-template-columns: 11px 1fr auto; align-items: center;
+    gap: 8px; font-size: 13px; color: var(--text-dim); white-space: nowrap; }
+  .algo-row i { width: 11px; height: 11px; border-radius: 3px; box-shadow: 0 0 8px currentColor; }
+  .algo-row b { color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums; }
+  .algo-d { font-size: 11px; color: var(--text-faint); margin: 2px 0 0 19px;
     font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .foot {
@@ -269,6 +275,10 @@
       <div class="sp-title">Algorithm Mix</div>
       <div class="algo-eye"><svg id="algoPie" viewBox="0 0 120 120"></svg></div>
       <div id="algoRows"></div>
+      <div class="algo-foot">
+        <div class="sp-row">Avg block <b id="ap-avg">—</b></div>
+        <div class="sp-row">Window <b id="ap-win">—</b></div>
+      </div>
     </div>
 
     <div class="stats-pop" id="statsPop">
@@ -1021,10 +1031,13 @@
 
     rows.innerHTML = ALGO_ORDER.map((k, i) => {
       const a = algoOf(k), pct = (counts[i]/total*100), d = diffs[k];
-      return `<div class="algo-row"><i style="background:${a.color};color:${a.color}"></i>
+      return `<div><div class="algo-row"><i style="background:${a.color};color:${a.color}"></i>
         <span>${a.label}</span><b>${pct.toFixed(1)}%</b></div>
-        <div class="algo-d">diff ${d ? fmtDiff(d) : "—"}</div>`;
+        <div class="algo-d">diff ${d ? fmtDiff(d) : "—"}</div></div>`;
     }).join("");
+    const avgEl = document.getElementById("ap-avg"), winEl = document.getElementById("ap-win");
+    if (avgEl){ const a = avgBlockTime(); avgEl.textContent = a ? a.toFixed(1) + "s" : "—"; }
+    if (winEl) winEl.textContent = mix.hours ? mix.hours.toFixed(0) + " h" : "—";
   }
   setInterval(() => {
     if (LIVE) return;                       // node supplies these when live
