@@ -14,6 +14,7 @@
     --bg-0: #06040d;
     --bg-1: #0c0819;
     --gutter: 34px;                     /* black letterbox padding on each side */
+    --tx-panel-w: min(340px, 30vw);     /* Live Transactions glass panel */
     --panel: rgba(18, 11, 36, 0.72);
     --border: rgba(123, 47, 214, 0.32);
     --text: #e9e2ff;
@@ -134,14 +135,24 @@
   .sp-title { font-size: 9px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; margin-bottom: 10px; }
   .sp-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin: 6px 0; }
   .sp-row b { color: var(--text); font-weight: 700; }
+  /* algorithm mix: floats in the band between the runway and the transactions panel */
+  .algo-panel {
+    position: absolute; top: 14px; z-index: 9; width: 138px;
+    right: calc(var(--gutter) + 8px + var(--tx-panel-w) + 12px);
+    background: rgba(6,4,13,0.5); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+    border: 1px solid var(--border); border-radius: 12px; padding: 10px 9px 11px;
+  }
+  .algo-panel .sp-title { margin-bottom: 6px; text-align: center; }
+  @media (max-width: 1180px) { .algo-panel { display: none; } }
   /* the algorithm mix, drawn as a squashed glowing "alien eye" donut */
   .algo-eye { display: flex; justify-content: center; margin: 2px 0 6px; }
   .algo-eye svg { width: 132px; height: 108px; overflow: visible; }
   .algo-row { display: grid; grid-template-columns: 8px 1fr auto; align-items: center;
-    gap: 7px; font-size: 10px; color: var(--text-dim); margin: 3px 0; }
+    gap: 6px; font-size: 10px; color: var(--text-dim); margin: 5px 0 0; white-space: nowrap; }
   .algo-row i { width: 8px; height: 8px; border-radius: 2px; box-shadow: 0 0 6px currentColor; }
   .algo-row b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .algo-row span.d { color: var(--text-faint); font-size: 9px; }
+  .algo-d { font-size: 8.5px; color: var(--text-faint); margin: 1px 0 0 14px;
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .foot {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
@@ -158,7 +169,7 @@
   /* Live Transactions: a translucent glass panel floating over the planet section */
   aside {
     position: absolute; top: 14px; bottom: 14px; right: calc(var(--gutter) + 8px);
-    width: min(340px, 30vw);
+    width: var(--tx-panel-w);
     background: rgba(6,4,13,0.5); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
     border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
     display: flex; flex-direction: column; overflow: hidden; z-index: 10;
@@ -254,16 +265,19 @@
   <div id="stage">
     <canvas id="scene"></canvas>
 
+    <div class="algo-panel" id="algoPanel">
+      <div class="sp-title">Algorithm Mix</div>
+      <div class="algo-eye"><svg id="algoPie" viewBox="0 0 120 120"></svg></div>
+      <div id="algoRows"></div>
+    </div>
+
     <div class="stats-pop" id="statsPop">
       <div class="sp-title">Transaction Types</div>
       <div class="legend-row"><span class="legend-swatch" style="background:#8a93b0"></span> Basecoin — public transfer</div>
       <div class="legend-row"><span class="legend-swatch" style="background:#22e0d6"></span> Stealth — one-time address</div>
       <div class="legend-row"><span class="legend-swatch" style="background:#d64bff"></span> RingCT — fully shielded</div>
       <div class="legend-row" style="margin:6px 0 12px;color:#6b628f;font-size:9px">Size = amount · Speed = fee priority</div>
-      <div class="sp-title">Algorithm Mix</div>
-      <div class="algo-eye"><svg id="algoPie" viewBox="0 0 120 120"></svg></div>
-      <div id="algoRows"></div>
-      <div class="sp-title" style="margin-top:12px">Network Detail</div>
+      <div class="sp-title">Network Detail</div>
       <div class="sp-row">Consensus <b>3 PoW algos + PoS</b></div>
       <div class="sp-row">Block time <b>~60 s</b></div>
       <div class="sp-row">Median fee <b id="sp-fee">—</b></div>
@@ -367,7 +381,9 @@
     // horizontal bands (top-down): sidewalk | main road | median | blockchain lane.
     // The street is packed into the left ~69% so the deep-space "planet section" fills
     // the right, where the translucent Live Transactions panel floats over the planets.
-    const rB = W * 0.69;
+    // on wide screens the street stops at 60% and the band beyond holds the algo panel;
+    // phones have no side panels, so give the street nearly the whole width
+    const rB = NARROW ? W * 0.86 : W * 0.60;
     geo.sidewalkX0 = rB * 0.037;
     geo.sidewalkX1 = rB * 0.146;
     geo.roadX0 = rB * 0.171;
@@ -576,13 +592,14 @@
     ctx.beginPath(); ctx.moveTo(dx+1, y0+h); ctx.lineTo(dx+dw-1, y0+h);
     ctx.lineTo(x+dw*1.5, y0+h+26); ctx.lineTo(x-dw*1.5, y0+h+26); ctx.closePath(); ctx.fill();
     // label: this is the transparent (basecoin) house
-    const ly = y0 - h*0.42 - 13, lw = Math.max(112, w*1.5);
-    ctx.fillStyle = "#0e1526"; roundRect(x - lw/2, ly - 8, lw, 15, 3); ctx.fill();
-    ctx.strokeStyle = hexA(warm, 0.7); ctx.lineWidth = 1.3; roundRect(x - lw/2, ly - 8, lw, 15, 3); ctx.stroke();
-    ctx.fillStyle = warm; ctx.font = "800 7px ui-monospace, monospace";
+    const ly = y0 - h*0.42 - 16, lw = Math.max(132, w*1.75);
+    ctx.fillStyle = "#0b1220"; roundRect(x - lw/2, ly - 10, lw, 20, 4); ctx.fill();
+    ctx.strokeStyle = hexA(warm, 0.85); ctx.lineWidth = 1.5; roundRect(x - lw/2, ly - 10, lw, 20, 4); ctx.stroke();
+    ctx.fillStyle = "#ffe6b8"; ctx.shadowColor = warm; ctx.shadowBlur = 7;
+    ctx.font = "800 10px ui-monospace, monospace";
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText("THE TRANSPARENT HOUSE", x, ly);
-    ctx.textBaseline = "alphabetic";
+    ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
   }
   function drawGate(time){
     const gx = geo.gateX, gy = geo.gateY, w = 46, h = 16;
@@ -1003,11 +1020,10 @@
             style="font:700 7.5px ui-monospace,monospace">BLOCKS · ${mix.hours ? mix.hours.toFixed(0)+"H" : ""}</text>`;
 
     rows.innerHTML = ALGO_ORDER.map((k, i) => {
-      const a = algoOf(k), pct = (counts[i]/total*100);
-      const d = diffs[k];
+      const a = algoOf(k), pct = (counts[i]/total*100), d = diffs[k];
       return `<div class="algo-row"><i style="background:${a.color};color:${a.color}"></i>
-        <span>${a.label}<span class="d">  diff ${d ? fmtDiff(d) : "—"}</span></span>
-        <b>${pct.toFixed(1)}%</b></div>`;
+        <span>${a.label}</span><b>${pct.toFixed(1)}%</b></div>
+        <div class="algo-d">diff ${d ? fmtDiff(d) : "—"}</div>`;
     }).join("");
   }
   setInterval(() => {
@@ -1729,12 +1745,20 @@
     const hero = LIVE ? ("LAST BLOCK · " + Math.floor(Math.max(0, stat.lastBlock)) + "s AGO" + tag)
                       : ("NEXT BLOCK · " + Math.ceil(Math.max(0, blockClock)) + "s");
     ctx.fillStyle = heroCol; ctx.shadowColor = heroGlow; ctx.shadowBlur = heroBlur;
-    ctx.font = (urgent ? "800 18px" : "800 17px") + " ui-monospace, monospace";
+    // shrink to fit: on a phone the board is far narrower than this text wants to be
+    const fitFont = (txt, px, weight) => {
+      for (let sz = px; sz >= 7; sz--){
+        ctx.font = weight + " " + sz + "px ui-monospace, monospace";
+        if (ctx.measureText(txt).width <= w - 14) return;
+      }
+    };
+    fitFont(hero, urgent ? 18 : 17, "800");
     ctx.fillText(hero, cxm, y+17);
     // sub line — rotating flavor
+    const sub = gantrySub()[gantryIdx % gantrySub().length];
     ctx.fillStyle = "#22e0d6"; ctx.shadowColor = "#22e0d6"; ctx.shadowBlur = 6;
-    ctx.font = "700 11px ui-monospace, monospace";
-    ctx.fillText(gantrySub()[gantryIdx % gantrySub().length], cxm, y+37);
+    fitFont(sub, 11, "700");
+    ctx.fillText(sub, cxm, y+37);
     ctx.restore();
     ctx.shadowBlur = 0;
     // small "edit" glyph nod to TxStreet
@@ -1848,6 +1872,8 @@
     // "BLOCK FOUND" marquee above the Blockchain sign — dark until a block lands
     const fx = geo.laneC, fw = 124, fh = 24, fy = geo.gantryY - 42;
     const fOn = foundTimer > 0;
+    if (NARROW){ /* the marquee spans this width on a phone — the sign would sit on top of it */ }
+    else {
     const blinkOn = fOn && (foundTimer > 3.2 || Math.sin(foundTimer * 14) > -0.35);   // flicker, then hold
     const fcol = "#ffcf5a";
     ctx.fillStyle = fOn ? "#241803" : "#0d0a18";
@@ -1862,6 +1888,7 @@
     else ctx.fillStyle = "rgba(120,110,160,0.30)";                 // unlit bulbs, still legible
     ctx.fillText("BLOCK FOUND", fx, fy + fh/2 + 0.5);
     ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
+    }
 
     // big green "Blockchain" sign (arrow above the word) at the head of the lane
     const sx = geo.laneC, sy = geo.gantryY - 8, sw = 112, sh = 46;
