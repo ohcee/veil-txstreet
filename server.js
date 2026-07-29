@@ -394,7 +394,7 @@ async function rankSnitch(){
                              label: SNITCH_LABELS[addr] || (t.sb > 0 ? "budget" : "") }))
       .filter(x => x.amount > 0)
       .sort((a, b) => b.amount - a.amount)
-      .slice(0, 12);
+      .slice(0, 15);
     snitchScanned = addrs.length;
     snitchAt = Date.now();
     saveSnitch();

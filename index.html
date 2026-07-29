@@ -108,7 +108,7 @@
   .snitch-head:hover { background: rgba(255,90,110,0.07); }
   .snitch-title { font-size: 10px; letter-spacing: 1.6px; color: #ff8a9b; text-transform: uppercase; font-weight: 800; }
   .snitch-sub { font-size: 9px; color: var(--text-faint); letter-spacing: 0.4px; }
-  .snitch-body { display: none; padding: 0 12px 10px; max-height: 210px; overflow-y: auto; }
+  .snitch-body { display: none; padding: 0 12px 10px; max-height: 290px; overflow-y: auto; }
   .snitch.open .snitch-body { display: block; }
   .snitch-note { font-size: 9px; color: var(--text-faint); line-height: 1.5; margin: 0 0 8px; }
   .snitch-note b { color: #ff8a9b; }
@@ -2126,12 +2126,12 @@
     const sub = document.getElementById("snitchSub"), rows = document.getElementById("snitchRows");
     if (!sub || !rows) return;
     const list = d.list || [];
-    sub.textContent = list.length ? "top 5 exposed" : (d.scanning ? "scanning…" : "watching…");
+    sub.textContent = list.length ? `top ${Math.min(10, list.length)} exposed` : (d.scanning ? "scanning…" : "watching…");
     if (!list.length){
       rows.innerHTML = `<div class="snitch-note">Nothing transparent caught yet — the node is still watching.</div>`;
       return;
     }
-    rows.innerHTML = list.slice(0, 5).map((x, i) => {
+    rows.innerHTML = list.slice(0, 10).map((x, i) => {
       const usd = (d.usd || 0) * x.amount;
       // treasury / known operators get named, so the list isn't read as private stashes
       const tag = x.label ? ` <i class="snitch-tag">${x.label}</i>` : "";
