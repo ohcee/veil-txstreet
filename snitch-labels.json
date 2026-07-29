@@ -1,0 +1,12 @@
+{
+  "_comment": [
+    "Names for known transparent addresses shown in the Snitch List.",
+    "Add pools, exchanges or services here as: \"<address>\": \"<name>\".",
+    "Addresses paid on superblock heights are auto-tagged 'budget' when unnamed.",
+    "Note: pools that pay out to stealth (sv...) addresses never appear in the list at",
+    "all — shielded outputs carry no address, so there is nothing to label."
+  ],
+  "labels": {
+    "VHU81LE2bTUe5AWSHSrDHcocqRWCK4dCRo": "fastpool"
+  }
+}

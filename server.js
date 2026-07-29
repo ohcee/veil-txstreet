@@ -32,6 +32,8 @@ const path = require("path");
 let fileCfg = {};
 try { fileCfg = JSON.parse(fs.readFileSync(path.join(__dirname, "config.json"), "utf8")); } catch (_) {}
 const CFG = {
+  snitchBackfill: 20000,     // blocks to walk back once, seeding the snitch list
+  snitchEveryMs: 90000,      // how often to re-price the harvested addresses
   port: +(process.env.PORT || fileCfg.port || 8790),
   feed: (process.env.FEED || fileCfg.feed || "rpc").toLowerCase(),
   rpcHost: process.env.VEIL_RPC_HOST || fileCfg.rpcHost || "127.0.0.1",
@@ -224,6 +226,7 @@ async function poll() {
           // idx 0 is the coinbase; on a PoS block idx 1 is the coinstake (the staking
           // reward). Both are block-reward machinery, not user traffic, so neither
           // should walk the street — the astronaut represents them.
+          if (full) harvestSnitch(blk);          // note any transparent addresses this block exposed
           const rewardTxs = detectAlgo(blk) === "pos" ? 2 : 1;
           txs.forEach((tx, idx) => {
             const tid = full ? (tx.txid || tx) : tx;
@@ -305,6 +308,123 @@ function startMock() {
 }
 
 // ---------------------------------------------------------------------------
+// Snitch list — the biggest TRANSPARENT (basecoin) addresses.
+//
+// Veil's node keeps no address index, and scantxoutset is a filter rather than an
+// enumerator: it can price an address you already know, but it cannot discover one.
+// So we harvest addresses from blocks as they stream past (free — we already fetch
+// every block), then periodically hand the whole harvested set to scantxoutset in
+// one pass to get real balances straight out of the UTXO set.
+//
+// That makes the balances exact, and the *coverage* honest-but-partial: these are
+// the biggest transparent addresses we have SEEN, not a chain-wide rich list. The
+// UI must label it that way.
+// ---------------------------------------------------------------------------
+const SNITCH_FILE = path.join(__dirname, "snitch-addrs.json");
+// Known operators, so the list doesn't read as if these were private stashes.
+// Edit snitch-labels.json to name more pools/exchanges; config.json may override with
+// { "snitchLabels": { "<address>": "name" } }. Pools that pay to stealth (sv...)
+// addresses never reach this list — shielded outputs carry no address to label.
+let labelFile = {};
+try { labelFile = (JSON.parse(fs.readFileSync(path.join(__dirname, "snitch-labels.json"), "utf8")) || {}).labels || {}; } catch (_) {}
+const SNITCH_LABELS = Object.assign({}, labelFile, fileCfg.snitchLabels || {});
+const SNITCH_BATCH = 600;                  // descriptors per scantxoutset pass
+let snitchSeen = new Map();                // address -> scriptPubKey hex
+let snitchList = [];                       // ranked [{ addr, amount, outs }]
+let snitchAt = 0;                          // when the ranking was last refreshed
+let snitchScanning = false;
+let snitchScanned = 0;                     // addresses priced in the last pass
+let backfillAt = null;                     // height the backfill has walked down to
+
+try {                                       // survive restarts so the set keeps growing
+  const raw = JSON.parse(fs.readFileSync(SNITCH_FILE, "utf8"));
+  if (raw && raw.addrs) { snitchSeen = new Map(Object.entries(raw.addrs)); backfillAt = raw.backfillAt || null; }
+} catch (_) {}
+function saveSnitch(){
+  try { fs.writeFileSync(SNITCH_FILE, JSON.stringify({
+    addrs: Object.fromEntries(snitchSeen), backfillAt, saved: Date.now() })); } catch (_) {}
+}
+
+// pull every transparent output's address out of a block. Shielded outputs (RingCT,
+// CT, zerocoin) carry no address at all, so they simply never show up here.
+function harvestSnitch(blk){
+  let added = 0;
+  for (const tx of (blk.tx || [])){
+    if (typeof tx === "string") continue;
+    for (const v of (tx.vout || [])){
+      const spk = v.scriptPubKey || {};
+      const addr = (spk.addresses && spk.addresses[0]) || spk.address;
+      if (!addr || !spk.hex) continue;
+      if (!snitchSeen.has(addr)){ snitchSeen.set(addr, spk.hex); added++; }
+    }
+  }
+  return added;
+}
+
+// price every harvested address against the live UTXO set
+async function rankSnitch(){
+  if (snitchScanning || !snitchSeen.size) return;
+  snitchScanning = true;
+  try {
+    const byHex = new Map();                       // hex -> address
+    for (const [a, hx] of snitchSeen) byHex.set(hx, a);
+    const addrs = [...snitchSeen.keys()];
+    const totals = new Map();                      // address -> { amount, outs }
+    for (let i = 0; i < addrs.length; i += SNITCH_BATCH){
+      const batch = addrs.slice(i, i + SNITCH_BATCH);
+      let r;
+      try { r = await rpc("scantxoutset", ["start", batch.map(a => `addr(${a})`)]); }
+      catch (_) { continue; }                      // a bad descriptor kills the batch, not the pass
+      if (!r || !r.success) continue;
+      for (const u of (r.unspents || [])){
+        const a = byHex.get(u.scriptPubKey);        // this build returns no desc — map via the script
+        if (!a) continue;
+        const t = totals.get(a) || { amount: 0, outs: 0, sb: 0 };
+        t.amount += u.amount || 0; t.outs++;
+        // Veil pays its budget on superblocks (every 43200). A large payout landing on
+        // one of those exact heights marks the treasury, not somebody's exposed stash.
+        // Requiring a big amount too, so an ordinary tx that happens to confirm in a
+        // superblock (1-in-43200) isn't mislabelled.
+        if (u.height && u.height % SUPERBLOCK_INTERVAL === 0 && (u.amount || 0) >= 1000) t.sb++;
+        totals.set(a, t);
+      }
+    }
+    snitchList = [...totals.entries()]
+      .map(([addr, t]) => ({ addr, amount: +t.amount.toFixed(8), outs: t.outs,
+                             label: SNITCH_LABELS[addr] || (t.sb > 0 ? "budget" : "") }))
+      .filter(x => x.amount > 0)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 12);
+    snitchScanned = addrs.length;
+    snitchAt = Date.now();
+    saveSnitch();
+  } finally { snitchScanning = false; }
+}
+
+// walk backwards from the tip so the list has substance on day one. Deliberately slow
+// and gap-filled so it never competes with the live poll for the node.
+let backfilling = false;
+async function backfillSnitch(){
+  if (backfilling || CFG.snitchBackfill <= 0) return;   // a pass outlives its interval; don't overlap
+  backfilling = true;
+  try { await backfillPass(); } finally { backfilling = false; }
+}
+async function backfillPass(){
+  if (backfillAt == null) backfillAt = stats.height || 0;
+  const floor = Math.max(1, (stats.height || 0) - CFG.snitchBackfill);
+  let done = 0;
+  while (backfillAt > floor && done < 150){
+    const h = backfillAt - 1;
+    try {
+      const blk = await rpc("getblock", [await rpc("getblockhash", [h]), 2]);
+      harvestSnitch(blk);
+    } catch (_) {}
+    backfillAt = h; done++;
+  }
+  if (backfillAt <= floor) saveSnitch();
+}
+
+// ---------------------------------------------------------------------------
 // HTTP server (static + /api/state)
 // ---------------------------------------------------------------------------
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
@@ -317,6 +437,13 @@ const server = http.createServer((req, res) => {
     const payload = { mode: stats.mode, seq, stats: liveStats, events: from < 0 ? [] : since(from) };
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
     res.end(JSON.stringify(payload));
+    return;
+  }
+  if (u.pathname === "/api/snitch") {
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+    res.end(JSON.stringify({ list: snitchList, seen: snitchSeen.size, priced: snitchScanned,
+                             updated: snitchAt, scanning: snitchScanning,
+                             backfillAt, usd: usdPrice }));
     return;
   }
   // static
@@ -342,5 +469,9 @@ server.listen(CFG.port, () => {
   console.log(`\n  VeilStreet  →  http://localhost:${CFG.port}`);
   console.log(`  feed: ${CFG.feed.toUpperCase()}` + (CFG.feed === "rpc" ? `  (veild ${CFG.rpcHost}:${CFG.rpcPort})` : "") + "\n");
   if (CFG.feed === "mock") startMock();
-  else { poll(); setInterval(poll, CFG.pollMs); }
+  else {
+    poll(); setInterval(poll, CFG.pollMs);
+    setTimeout(rankSnitch, 8000); setInterval(rankSnitch, CFG.snitchEveryMs);
+    setInterval(backfillSnitch, 2000);        // trickle the backfill in behind the live feed
+  }
 });

@@ -101,6 +101,29 @@
   .legend-row { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--text-dim); margin: 4px 0; }
   .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
 
+  /* snitch list — transparent addresses, sat above the recent-blocks strip */
+  .snitch { border-top: 1px solid var(--border); flex: none; background: rgba(255,90,110,0.04); }
+  .snitch-head { display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 14px; cursor: pointer; user-select: none; }
+  .snitch-head:hover { background: rgba(255,90,110,0.07); }
+  .snitch-title { font-size: 10px; letter-spacing: 1.6px; color: #ff8a9b; text-transform: uppercase; font-weight: 800; }
+  .snitch-sub { font-size: 9px; color: var(--text-faint); letter-spacing: 0.4px; }
+  .snitch-body { display: none; padding: 0 12px 10px; max-height: 210px; overflow-y: auto; }
+  .snitch.open .snitch-body { display: block; }
+  .snitch-note { font-size: 9px; color: var(--text-faint); line-height: 1.5; margin: 0 0 8px; }
+  .snitch-note b { color: #ff8a9b; }
+  .snitch-row { display: grid; grid-template-columns: 15px 1fr auto; align-items: center; gap: 8px;
+    padding: 4px 0; border-bottom: 1px solid rgba(123,47,214,0.13); }
+  .snitch-row:last-child { border-bottom: 0; }
+  .snitch-rank { font-size: 9px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .snitch-addr { font-size: 10px; color: var(--text-dim); font-family: ui-monospace, monospace;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .snitch-addr:hover { color: var(--veil-cyan); }
+  .snitch-tag { font-style: normal; font-size: 7.5px; letter-spacing: 0.6px; text-transform: uppercase;
+    color: #ffcf5a; border: 1px solid rgba(255,207,90,0.45); border-radius: 3px; padding: 0 3px; margin-left: 3px; }
+  .snitch-amt { text-align: right; font-size: 10px; font-weight: 700; color: #ffb3bd;
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .snitch-amt span { display: block; font-size: 8px; color: var(--text-faint); font-weight: 400; }
   /* recent-blocks strip, now pinned to the bottom of the Live Transactions sidebar */
   .rb-foot {
     border-top: 1px solid var(--border); padding: 10px 16px 12px;
@@ -139,13 +162,14 @@
   .algo-panel {
     position: absolute; top: 14px; bottom: 14px; z-index: 9;
     /* spans the whole empty band: from the end of the street to the transactions panel */
-    left: calc(var(--gutter) + (100vw - 2 * var(--gutter)) * 0.60 + 14px);
-    right: calc(var(--gutter) + 8px + var(--tx-panel-w) + 12px);
+    left: calc(var(--gutter) + (100vw - 2 * var(--gutter)) * 0.60 + 9px);
+    right: calc(var(--gutter) + 8px + var(--tx-panel-w) + 9px);
     background: rgba(6,4,13,0.5); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
-    border: 1px solid var(--border); border-radius: 12px; padding: 12px 11px 14px;
+    border: 1px solid var(--border); border-radius: 12px; padding: 11px 8px 12px;
     display: flex; flex-direction: column; overflow: hidden;
   }
-  .algo-panel .sp-title { margin-bottom: 8px; text-align: center; font-size: 10px; }
+  .algo-panel .sp-title { margin-bottom: 8px; text-align: center;
+    font-size: clamp(8px, 0.62vw, 11px); letter-spacing: 1.2px; white-space: nowrap; }
   .algo-foot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
   .algo-foot .sp-row { font-size: 11px; margin: 5px 0; }
   @media (max-width: 1180px) { .algo-panel { display: none; } }
@@ -153,12 +177,13 @@
   .algo-eye { display: flex; justify-content: center; margin: 0 0 4px; flex: none; }
   .algo-eye svg { width: 100%; max-width: 190px; height: auto; overflow: visible; }
   #algoRows { flex: 1; display: flex; flex-direction: column; justify-content: space-evenly; min-height: 0; }
-  .algo-row { display: grid; grid-template-columns: 11px 1fr auto; align-items: center;
-    gap: 8px; font-size: 13px; color: var(--text-dim); white-space: nowrap; }
-  .algo-row i { width: 11px; height: 11px; border-radius: 3px; box-shadow: 0 0 8px currentColor; }
+  .algo-row { display: grid; grid-template-columns: 9px 1fr auto; align-items: center;
+    gap: 6px; font-size: clamp(9.5px, 0.86vw, 15px); color: var(--text-dim); white-space: nowrap; }
+  .algo-row i { width: 9px; height: 9px; border-radius: 2px; box-shadow: 0 0 8px currentColor; }
   .algo-row b { color: var(--text); font-weight: 800; font-variant-numeric: tabular-nums; }
-  .algo-d { font-size: 11px; color: var(--text-faint); margin: 2px 0 0 19px;
+  .algo-d { font-size: clamp(8.5px, 0.68vw, 12px); color: var(--text-faint); margin: 2px 0 0 15px;
     font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .algo-foot .sp-row { font-size: clamp(9px, 0.7vw, 12px); }
 
   .foot {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
@@ -323,6 +348,17 @@
       <div class="side-hint">Click a tx to open it in the <b>Veil explorer&nbsp;↗</b></div>
     </div>
     <div class="tx-list" id="txList"></div>
+    <div class="snitch" id="snitchBox">
+      <div class="snitch-head" id="snitchHead">
+        <span class="snitch-title">🐀 Snitch List</span>
+        <span class="snitch-sub" id="snitchSub">—</span>
+      </div>
+      <div class="snitch-body" id="snitchBody">
+        <div class="snitch-note">Biggest <b>transparent</b> addresses we've watched move.
+          No stealth, no RingCT — anyone can read these balances.</div>
+        <div id="snitchRows"></div>
+      </div>
+    </div>
     <div class="rb-foot">
       <div class="rb-title">Recent blocks · algorithm</div>
       <div class="rb-chips" id="rbChips"></div>
@@ -2073,6 +2109,54 @@
         else if (ev.kind === "block") onLiveBlock(ev);
       }
     } catch (e){ setMode("offline"); }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Snitch list — the biggest transparent addresses the node has shown us.
+  // Balances are exact (straight from the UTXO set); the *coverage* is only the
+  // addresses we've observed, so the panel says so rather than claiming a rich list.
+  // ---------------------------------------------------------------------------
+  const explorerAddr = (a) => `${EXPLORER}/address/${a}`;
+  function fmtVeil(v){
+    if (v >= 1e6) return (v/1e6).toFixed(2) + "M";
+    if (v >= 1e3) return Math.round(v).toLocaleString();
+    return v.toFixed(2);
+  }
+  function renderSnitch(d){
+    const sub = document.getElementById("snitchSub"), rows = document.getElementById("snitchRows");
+    if (!sub || !rows) return;
+    const list = d.list || [];
+    sub.textContent = list.length ? "top 5 exposed" : (d.scanning ? "scanning…" : "watching…");
+    if (!list.length){
+      rows.innerHTML = `<div class="snitch-note">Nothing transparent caught yet — the node is still watching.</div>`;
+      return;
+    }
+    rows.innerHTML = list.slice(0, 5).map((x, i) => {
+      const usd = (d.usd || 0) * x.amount;
+      // treasury / known operators get named, so the list isn't read as private stashes
+      const tag = x.label ? ` <i class="snitch-tag">${x.label}</i>` : "";
+      return `<div class="snitch-row">
+        <span class="snitch-rank">${i+1}</span>
+        <span class="snitch-addr" data-addr="${x.addr}" title="${x.addr} · ${x.outs} outputs">${short(x.addr, 7, 5)}${tag}</span>
+        <span class="snitch-amt">${fmtVeil(x.amount)} VEIL${usd > 0 ? `<span>${fmtUsd(usd)}</span>` : ""}</span>
+      </div>`;
+    }).join("");
+  }
+  async function pollSnitch(){
+    try {
+      const r = await fetch("/api/snitch", { cache: "no-store" });
+      if (r.ok) renderSnitch(await r.json());
+    } catch (_) {}
+  }
+  {
+    const box = document.getElementById("snitchBox"), head = document.getElementById("snitchHead");
+    if (head) head.addEventListener("click", () => box.classList.toggle("open"));
+    const rows = document.getElementById("snitchRows");
+    if (rows) rows.addEventListener("click", (e) => {
+      const a = e.target.closest(".snitch-addr");
+      if (a) window.open(explorerAddr(a.dataset.addr), "_blank", "noopener");
+    });
+    pollSnitch(); setInterval(pollSnitch, 30000);
   }
 
   // Boot
