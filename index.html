@@ -1471,15 +1471,24 @@
       ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
       ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-0.8, sy-0.8, 0.9, 0, 6.28); ctx.fill();
     }
-    // the coinbase astronaut at the helm — drawn only after a miner has boarded (no pickaxe in the cockpit)
+    // the block reward rides in the cockpit — a gold coin rather than the miner's head,
+    // so what the ship is carrying reads at a glance. Only once the coinbase has boarded.
     if (b.hasPilot){
-    const ax = cx, ay = domeCY - domeH*0.02, as = Math.max(2.1, domeW*0.066);
-    ctx.fillStyle = "#eef2f8"; ctx.beginPath(); ctx.arc(ax, ay, as, 0, 6.28); ctx.fill();           // helmet
-    const avg = ctx.createLinearGradient(ax-as, ay-as*0.6, ax+as, ay+as*0.6);
-    avg.addColorStop(0, "#2a3550"); avg.addColorStop(1, "#0c1424");
-    ctx.fillStyle = avg; ctx.beginPath(); ctx.ellipse(ax, ay+as*0.08, as*0.68, as*0.74, 0,0,6.28); ctx.fill();  // visor
-    ctx.fillStyle = hexA(oc,0.9); ctx.shadowColor = oc; ctx.shadowBlur = 5;
-    ctx.beginPath(); ctx.arc(ax-as*0.24, ay-as*0.12, as*0.2, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;         // visor glint
+      const ax = cx, ay = domeCY - domeH*0.02, as = Math.max(2.6, domeW*0.082);
+      ctx.fillStyle = "#dfa62a"; ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 9;      // rim
+      ctx.beginPath(); ctx.arc(ax, ay, as, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+      const cg = ctx.createLinearGradient(ax-as, ay-as, ax+as, ay+as);                 // face
+      cg.addColorStop(0, "#ffe6a0"); cg.addColorStop(0.55, "#ffcf5a"); cg.addColorStop(1, "#d99b1f");
+      ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(ax, ay, as*0.78, 0, 6.28); ctx.fill();
+      ctx.strokeStyle = "#8a5a00"; ctx.lineWidth = Math.max(0.8, as*0.2);              // the Veil V struck on it
+      ctx.lineCap = "round"; ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(ax - as*0.40, ay - as*0.26);
+      ctx.lineTo(ax,            ay + as*0.40);
+      ctx.lineTo(ax + as*0.40, ay - as*0.26);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.55)";                                        // highlight
+      ctx.beginPath(); ctx.arc(ax - as*0.34, ay - as*0.36, as*0.17, 0, 6.28); ctx.fill();
     }
 
     // the real Veil logo, faded, watermarked on the hull (like a coin on the block car)
