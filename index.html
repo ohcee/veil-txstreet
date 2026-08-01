@@ -1552,10 +1552,10 @@
     // bright pulsing red when it's packed — or when the block is running late
     // while the ship forms, the crowd is OUTSIDE — the ladder reads them plus anyone aboard
     const loadN = pax.length + ((b.state === "waiting" || b.state === "loading") ? queueN : 0);
-    const litPorts = Math.min(8, Math.ceil(loadN / 3));
+    const litPorts = Math.min(8, Math.ceil(loadN / 10));           // each porthole = 10 aboard/waiting
     const blockLate = LIVE && stat.lastBlock > BLOCK_TIME * 2.5;   // same threshold the marquee warms at
-    const packed = loadN >= 24 || blockLate;
-    const portCol = packed ? "#ff4d3d" : loadN >= 12 ? "#ffcf5a" : "#3dff9a";
+    const packed = loadN > 100 || blockLate;                       // >100 (or a late block): all red
+    const portCol = packed ? "#ff4d3d" : loadN >= 90 ? "#ffcf5a" : "#3dff9a";   // 90+: all yellow
     const portPulse = packed ? 0.5 + 0.5 * Math.sin(time * 6) : 0;
     for (let i = 0; i < 8; i++){
       const side = (i % 2) ? 1 : -1, row = (i / 2) | 0;
