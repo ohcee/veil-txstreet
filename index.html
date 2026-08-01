@@ -861,9 +861,17 @@
     const viaGate  = fresh && key === "stealth";
     const viaDrop  = fresh && key === "ringct";
     const drop = viaDrop ? ringSpot() : null;
+    // a mid-street spawn (sim seeds, restarts) must sit in open ground for its y —
+    // the stem inside the corridor, the lane below the merge — never in the bushes
+    const seedX = !fresh
+      ? (d.atY > geo.mergeY0 ? geo.laneC + (Math.random()-0.5)*30
+         : d.atY > geo.tBarY1 ? geo.tStemC + (Math.random()-0.5)*geo.tStemW*0.6
+         : geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20))
+      : 0;
     const spawnX = viaHouse ? geo.houseX + (Math.random()-0.5)*14
                  : viaGate  ? geo.gateX + (Math.random()-0.5)*18
                  : viaDrop  ? drop.x
+                 : !fresh   ? seedX
                  : geo.tLeft + 10 + Math.random() * Math.max(20, (geo.tRight - geo.tLeft) - 20);
     const spawnY = !fresh ? d.atY
                  : viaHouse ? geo.houseY + geo.houseH*0.5 + 5
@@ -1221,6 +1229,13 @@
           p.x += (geo.tStemC - p.x) * Math.min(1, dt * 1.8);
           p.spawnX = p.x;                       // the later lane merge starts from here
         }
+        // a walker that ISN'T boarding still shouldn't trample the bush field below the
+        // corridor — drift it into the open band right of the bushes and let it walk
+        // off-screen through the portal ground
+        if (!p.boards && !p.climbing && p.y > geo.mergeY0) {
+          const bandC = (geo.tRight + geo.roadX1) / 2 + (p.sway % 1 - 0.5) * 40;
+          p.x += (bandC - p.x) * Math.min(1, dt * 1.6);
+        }
         // merge toward lane if boarding. climbers start out BELOW the boarding line
         // (mine and gate are near the bottom), so they must finish climbing first —
         // otherwise they'd merge and board on their very first frame.
@@ -1477,53 +1492,103 @@
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     ctx.beginPath(); ctx.ellipse(cx, y+h*0.12, w*0.26, h*0.05, 0, 0, 6.28); ctx.fill();
 
-    // cockpit dome — the coinbase astronaut pilots every block; tx passengers ride behind
+    // cockpit viewport — a glass dome you genuinely see the cabin through: the crowd
+    // packs in around the coin, the cabin light warms as it fills, and everything is
+    // clipped to the glass so nothing pokes through the hull
     const domeY = y+h*0.09, domeH = h*0.26, domeW = w*0.66, domeCY = domeY+domeH*0.5;
+    const pax = b.passengers.filter(p => !p.miner);   // miners are shown as the pilot, not extra heads
+
+    // hull portholes down both sides — one lights for every 3 aboard, so a loaded
+    // ship glows along its flanks before it ever leaves
+    const litPorts = Math.min(8, Math.ceil(pax.length / 3));
+    for (let i = 0; i < 8; i++){
+      const side = (i % 2) ? 1 : -1, row = (i / 2) | 0;
+      const px = cx + side * w * 0.285, py = y + h * (0.40 + row * 0.072);
+      const on = i < litPorts;
+      ctx.fillStyle = "#0d1120"; ctx.beginPath(); ctx.arc(px, py, 2.7, 0, 6.28); ctx.fill();
+      ctx.fillStyle = on ? "#ffd98a" : "#141a2e";
+      if (on){ ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 6; }
+      ctx.beginPath(); ctx.arc(px, py, 1.8, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+      ctx.strokeStyle = on ? "rgba(255,207,90,0.5)" : "rgba(90,100,140,0.35)"; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.arc(px, py, 2.7, 0, 6.28); ctx.stroke();
+    }
+
+    // glass back
     ctx.fillStyle = "#0a1420";
     ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.fill();
-    const dg = ctx.createLinearGradient(cx, domeY, cx, domeY+domeH);
-    dg.addColorStop(0,"rgba(150,220,255,0.22)"); dg.addColorStop(1,"rgba(20,40,70,0.5)");
-    ctx.fillStyle = dg; ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.fill();
-    ctx.strokeStyle = hexA(oc,0.6); ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.stroke();
-    // tx passengers (boarded mempool txs) — little coloured heads behind the pilot
-    const pax = b.passengers.filter(p => !p.miner);   // miners are shown as the pilot, not extra heads
-    const seatMax = 10, seatN = Math.min(seatMax, pax.length), cols = 5;
-    for (let i=0;i<seatN;i++){
-      const p = pax[i], col = (TX_TYPES[p.tx.type] || TX_TYPES.base).color;
-      const sx = cx - domeW*0.32 + (i%cols)*(domeW*0.64/(cols-1));
-      const sy = domeCY + domeH*0.14 + Math.floor(i/cols)*(domeH*0.26);
-      // little Veilian tentacles, waving in their own colour
-      const wob = Math.sin(time*3 + i*1.3)*0.7;
-      ctx.strokeStyle = col; ctx.lineWidth = 0.7; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(sx-1.1, sy-1.7); ctx.quadraticCurveTo(sx-1.9, sy-3.2, sx-1.5+wob, sy-4.1); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(sx+1.1, sy-1.7); ctx.quadraticCurveTo(sx+1.9, sy-3.2, sx+1.5+wob, sy-4.1); ctx.stroke();
-      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 4;
-      ctx.beginPath(); ctx.arc(sx-1.5+wob, sy-4.1, 0.55, 0, 6.28); ctx.fill();
-      ctx.beginPath(); ctx.arc(sx+1.5+wob, sy-4.1, 0.55, 0, 6.28); ctx.fill();
-      // the head
-      ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
-      ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(sx-0.8, sy-0.8, 0.9, 0, 6.28); ctx.fill();
+
+    // ---- inside the glass (clipped) ----
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.clip();
+    // cabin light — warms and brightens as the cabin fills
+    const load = Math.min(1, pax.length / 34);
+    const cabin = ctx.createRadialGradient(cx, domeCY, 1, cx, domeCY, domeW*0.52);
+    cabin.addColorStop(0, `rgba(255,214,150,${(0.06 + load*0.16).toFixed(3)})`);
+    cabin.addColorStop(1, "rgba(255,214,150,0)");
+    ctx.fillStyle = cabin; ctx.fillRect(cx-domeW/2, domeY, domeW, domeH);
+    // floor shadow for depth
+    ctx.fillStyle = "rgba(0,0,0,0.30)";
+    ctx.beginPath(); ctx.ellipse(cx, domeCY + domeH*0.34, domeW*0.42, domeH*0.16, 0,0,6.28); ctx.fill();
+
+    // seats: three concentric rings round the coin, drawn back row first so the front
+    // row overlaps it — reads as depth through the glass
+    const RINGS = [ {r:0.42, n:7, off:0.30}, {r:0.72, n:11, off:0.05}, {r:0.95, n:14, off:0.18} ];
+    const seats = [];
+    for (const ring of RINGS)
+      for (let k = 0; k < ring.n; k++){
+        const a2 = ring.off + k / ring.n * 6.283;
+        seats.push({ u: Math.cos(a2)*ring.r, v: Math.sin(a2)*ring.r });
+      }
+    seats.sort((s1, s2) => s1.v - s2.v);                       // back of the cabin first
+    const seatN = Math.min(seats.length, pax.length);
+    const hs0 = (pax.length <= 10 ? 2.4 : pax.length <= 20 ? 2.1 : 1.8) * Math.max(0.7, domeW/99);
+    for (let i = 0; i < seatN; i++){
+      const st = seats[i], p = pax[i], col = (TX_TYPES[p.tx.type] || TX_TYPES.base).color;
+      const sx = cx + st.u * domeW*0.43;
+      const sy = domeCY + st.v * domeH*0.36 + Math.sin(time*2 + i)*0.5;
+      const depth = (st.v + 1) / 2;                            // 0 back … 1 front
+      const hsz = hs0 * (0.82 + depth*0.24);
+      ctx.globalAlpha = b.alpha * (0.72 + depth*0.28);
+      if (hsz >= 1.9){                                          // tentacles only when they'd resolve
+        const wob = Math.sin(time*3 + i*1.3)*0.6;
+        ctx.strokeStyle = col; ctx.lineWidth = 0.6; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(sx-0.9, sy-hsz*0.6); ctx.quadraticCurveTo(sx-1.6, sy-hsz*1.5, sx-1.2+wob, sy-hsz*1.9); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sx+0.9, sy-hsz*0.6); ctx.quadraticCurveTo(sx+1.6, sy-hsz*1.5, sx+1.2+wob, sy-hsz*1.9); ctx.stroke();
+      }
+      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 3;
+      ctx.beginPath(); ctx.arc(sx, sy, hsz, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.beginPath(); ctx.arc(sx - hsz*0.3, sy - hsz*0.3, hsz*0.34, 0, 6.28); ctx.fill();
+      ctx.globalAlpha = b.alpha;
     }
-    // the block reward rides in the cockpit — a gold coin rather than the miner's head,
-    // so what the ship is carrying reads at a glance. Only once the coinbase has boarded.
+
+    // the block reward at the console — a gold coin, front and centre of the cabin
     if (b.hasPilot){
-      const ax = cx, ay = domeCY - domeH*0.02, as = Math.max(2.6, domeW*0.082);
-      ctx.fillStyle = "#dfa62a"; ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 9;      // rim
+      const ax = cx, ay = domeCY + domeH*0.05, as = Math.max(2.6, domeW*0.082);
+      ctx.fillStyle = "#dfa62a"; ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 9;
       ctx.beginPath(); ctx.arc(ax, ay, as, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
-      const cg = ctx.createLinearGradient(ax-as, ay-as, ax+as, ay+as);                 // face
+      const cg = ctx.createLinearGradient(ax-as, ay-as, ax+as, ay+as);
       cg.addColorStop(0, "#ffe6a0"); cg.addColorStop(0.55, "#ffcf5a"); cg.addColorStop(1, "#d99b1f");
       ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(ax, ay, as*0.78, 0, 6.28); ctx.fill();
-      ctx.strokeStyle = "#8a5a00"; ctx.lineWidth = Math.max(0.8, as*0.2);              // the Veil V struck on it
+      ctx.strokeStyle = "#8a5a00"; ctx.lineWidth = Math.max(0.8, as*0.2);
       ctx.lineCap = "round"; ctx.lineJoin = "round";
       ctx.beginPath();
       ctx.moveTo(ax - as*0.40, ay - as*0.26);
       ctx.lineTo(ax,            ay + as*0.40);
       ctx.lineTo(ax + as*0.40, ay - as*0.26);
       ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.55)";                                        // highlight
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
       ctx.beginPath(); ctx.arc(ax - as*0.34, ay - as*0.36, as*0.17, 0, 6.28); ctx.fill();
     }
+    ctx.restore();
+    // ---- glass in front: tint, sheen, rim ----
+    const dg = ctx.createLinearGradient(cx, domeY, cx, domeY+domeH);
+    dg.addColorStop(0,"rgba(150,220,255,0.16)"); dg.addColorStop(1,"rgba(20,40,70,0.30)");
+    ctx.fillStyle = dg; ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.fill();
+    ctx.strokeStyle = "rgba(210,240,255,0.35)"; ctx.lineWidth = 1.1;                   // sheen arc
+    ctx.beginPath(); ctx.ellipse(cx - domeW*0.06, domeCY - domeH*0.10, domeW*0.36, domeH*0.30, -0.18, 3.5, 5.7); ctx.stroke();
+    ctx.strokeStyle = hexA(oc,0.6); ctx.lineWidth = 1.4;                               // rim
+    ctx.beginPath(); ctx.ellipse(cx, domeCY, domeW*0.5, domeH*0.5, 0,0,6.28); ctx.stroke();
 
     // the real Veil logo, faded, watermarked on the hull (like a coin on the block car)
     if (veilLogo.complete && veilLogo.naturalWidth){
