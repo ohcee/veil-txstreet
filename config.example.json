@@ -1,17 +1,15 @@
 {
   "_comment": "Copy to config.json and edit, OR set the same values as env vars. Env vars win over this file.",
-
   "port": 8790,
   "feed": "rpc",
-
   "rpcHost": "127.0.0.1",
-  "rpcPort": 58812,
+  "_rpcPort_note": "Leave rpcPort out to auto-detect the chain (probes mainnet 58812, then testnet 58813). Add \"rpcPort\": 58812 or 58813 to pin one.",
   "rpcUser": "veilrpc",
   "rpcPass": "CHANGE_ME",
-
   "_or_use_a_cookie_instead_of_user_pass": "point rpcCookie at your datadir/.cookie and remove rpcUser/rpcPass",
   "rpcCookie": "",
-
   "pollMs": 2500,
-  "mockBlockMs": 60000
+  "mockBlockMs": 60000,
+  "_snitchLabels_note": "Optional: name known transparent addresses in the Snitch List (also see snitch-labels.json)",
+  "snitchLabels": {}
 }

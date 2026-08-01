@@ -1,10 +1,30 @@
 # VeilStreet
 
-A live, TxStreet-style privacy-transaction visualizer for **Veil (VEIL)**. Transactions
-walk down the street as hooded figures (grey = Basecoin, cyan = Stealth, magenta =
-RingCT), board the block-bus, and ride off when a block is found. Figure size tracks
-transaction **vSize** (amounts are hidden on a privacy chain, exactly like TxStreet's
-Monero street), and walking speed tracks fee priority.
+A live, TxStreet-style visualizer for **Veil (VEIL)** — set in space, because Veil's
+community used to call themselves **Veilians**. Every mempool transaction is a Veilian
+walking to the mothership (the forming block); when the network finds a block, the
+BLOCK FOUND sign flickers on, everyone the block accepted rushes up the boarding
+stairs, and the ship lifts off toward the chain.
+
+How private a transaction is decides what its Veilian looks like **and how it
+arrives** — the arrival is a picture of its traceability:
+
+| Type | Being | Arrival |
+|---|---|---|
+| **Basecoin** (grey) | human | walks out the front door of **The Transparent House** — origin in plain sight |
+| **Stealth** (cyan) | full alien | surfaces through a ground portal — you see the point, not the source |
+| **RingCT** (magenta) | hybrid, cloaked to a faint ghost | materialises on one of **twelve portals** (one per ring in the signature) or anywhere open — nothing to trace |
+
+The block's **coinbase** is an astronaut who climbs out of the mine carrying a gold
+coin (on a superblock he gets an armed escort — that's the monthly budget payout), and
+the coin rides in the ship's cockpit. Figure size tracks transaction **vSize** (amounts
+are hidden on a privacy chain, like TxStreet's Monero street); walking speed tracks fee
+priority.
+
+Reading the ship: the dome is a glass viewport into the cabin, and the **portholes are
+a load gauge** — one light per ten transactions waiting or aboard, all yellow at 90,
+all red past 100. The crowd at the stairs stands still while the chain is healthy and
+starts fidgeting when the block runs late; the marquee clock heats up with it.
 
 Built with a zero-dependency Node backend (`server.js`) and a single self-contained
 `index.html` (pure Canvas 2D — no build step, no npm install).
@@ -16,66 +36,86 @@ Built with a zero-dependency Node backend (`server.js`) and a single self-contai
 
 ## Quick start
 
-**See it immediately (mock live feed):**
+**With a local Veil node (the real thing):**
+
+```bash
+./start.sh
+```
+
+Starts `veild` if it isn't running (set `VEIL_DIR` if your binaries aren't in
+`~/Downloads/macosx-binaries`), waits for the RPC to answer, then serves the
+visualizer at http://localhost:8790 and prints the LAN URL for your phone.
+
+The chain is **auto-detected**: it probes mainnet's RPC port (58812) first, then
+testnet's (58813), and locks onto whichever node answers. Force one with:
+
+```bash
+./start.sh testnet     # or: ./start.sh mainnet
+```
+
+**See it immediately (no node):**
 
 ```bash
 FEED=mock node server.js
 ```
 
-Open http://localhost:8790 — the badge reads **LIVE · MOCK** and a synthetic feed drives
-the street. (No node required; good for demos and development.)
+The badge reads **LIVE · MOCK** and a synthetic feed drives the street.
 
-**Static only (no backend):** just open `index.html` in a browser. With no `/api/state`
-to reach, the badge shows **OFFLINE · SIM** and the built-in simulation runs.
+**Static only:** open `index.html` in a browser — with no backend the badge shows
+**OFFLINE · SIM** and a built-in simulation runs.
 
 ---
 
-## Real data (point it at your Veil node)
+## Real data (what it reads from veild)
 
-The backend reads a `veild` over JSON-RPC and serves a live delta feed the page consumes.
-
-1. In your `veil.conf` enable the RPC server:
-
-   ```ini
-   server=1
-   rpcuser=veilrpc
-   rpcpassword=CHANGE_ME
-   rpcallowip=127.0.0.1
-   # txindex=1   # optional — only needed to resolve non-mempool txs
-   ```
-
-2. Start `veild`, then run the backend against it:
-
-   ```bash
-   VEIL_RPC_HOST=127.0.0.1 \
-   VEIL_RPC_PORT=58812 \
-   VEIL_RPC_USER=veilrpc \
-   VEIL_RPC_PASS=CHANGE_ME \
-   node server.js
-   ```
-
-   …or copy `config.example.json` → `config.json`, fill it in, and just run `node server.js`.
-   (Cookie auth: set `VEIL_RPC_COOKIE=/path/to/datadir/.cookie` instead of user/pass.)
-
-3. Open http://localhost:8790 — the badge reads **LIVE**. New mempool transactions appear
-   as walkers; each new block departs the bus with its real height / hash / tx count.
-
+The backend polls a `veild` over JSON-RPC and serves a delta feed the page consumes.
 If the node is unreachable the feed reports **OFFLINE** and the page falls back to the
 simulation, so it never breaks.
 
-### What it reads
-
 | RPC call | Used for |
 |---|---|
-| `getblockchaininfo` | height, difficulty, chain |
+| `getblockchaininfo` | height, chain, best block hash (shown on the waiting ship), per-algo difficulty |
+| `getchainalgostats` | true average block time and the algorithm mix (~25h window) |
 | `getmininginfo` | network hashrate |
 | `getmempoolinfo` | mempool size |
 | `getrawmempool true` | new transactions (vSize, fee, time) |
 | `getrawtransaction <txid> true` | classify Basecoin / Stealth / RingCT by output type |
-| `getblockhash` / `getblock` | new blocks (hash, tx count, size) |
+| `getblockhash` / `getblock` | new blocks (hash, tx count, algorithm, txids) |
+| `scantxoutset` | exact balances for the Snitch List |
 
-Transactions link out to the [Veil explorer](https://explorer.veil-project.com/main):
-click a walker or a sidebar row to open `/main/tx/<txid>`, or the bus to open `/main/blocks`.
+Node config (`veil.conf`):
+
+```ini
+server=1
+rpcuser=veilrpc
+rpcpassword=CHANGE_ME
+rpcallowip=127.0.0.1
+```
+
+Copy `config.example.json` → `config.json` with your credentials, or pass them as env
+vars. Transactions link out to the [Veil explorer](https://explorer.veil-project.com/main).
+
+### The Snitch List
+
+Instead of a rich list, a **snitch list**: the largest **transparent** (basecoin)
+addresses — the ones anyone can read. The node keeps no address index, so the server
+harvests addresses from blocks as they stream past (plus a one-time ~20k-block
+backfill) and prices the whole set against the UTXO set with `scantxoutset` every 90s.
+Balances are exact; coverage is the addresses it has *seen*, and the panel says so.
+
+Stealth and RingCT outputs carry no address at all, so they can never appear — which
+is the point. Addresses paid on superblock heights are tagged **budget** (that's
+Veil's treasury, not somebody's stash); name pools and services in
+`snitch-labels.json`. The harvest persists per chain (`snitch-addrs.json` for mainnet,
+`snitch-addrs-<port>.json` otherwise) and is gitignored.
+
+### Superblocks
+
+Veil pays its budget on a superblock every **43,200 blocks** (~monthly). There's no
+RPC for it — the server derives it from the interval, same as the explorers. The
+marquee counts down to the next one, and on the superblock itself the coinbase
+astronaut walks out of the mine under armed escort with the payout in a hover-crate.
+Preview it any time with `?superblock=1`.
 
 ---
 
@@ -88,23 +128,32 @@ All optional. Env var overrides `config.json` overrides the built-in default.
 | `PORT` | `port` | `8790` | HTTP port |
 | `FEED` | `feed` | `rpc` | `rpc` (real node) or `mock` (synthetic) |
 | `VEIL_RPC_HOST` | `rpcHost` | `127.0.0.1` | node host |
-| `VEIL_RPC_PORT` | `rpcPort` | `58812` | node RPC port (Veil mainnet) |
+| `VEIL_RPC_PORT` | `rpcPort` | *auto* | RPC port; unset = probe 58812 then 58813 |
 | `VEIL_RPC_USER` / `VEIL_RPC_PASS` | `rpcUser` / `rpcPass` | — | RPC credentials |
 | `VEIL_RPC_COOKIE` | `rpcCookie` | — | path to `.cookie` (instead of user/pass) |
 | `POLL_MS` | `pollMs` | `2500` | RPC poll interval |
 | `MOCK_BLOCK_MS` | `mockBlockMs` | `60000` | mock block interval |
+| `VEIL_USD` | `veilUsd` | *auto* | pin the VEIL→USD price; unset = live NonKYC price |
+| `VEIL_MARKET` | `veilMarket` | `VEIL_USDT` | NonKYC market for the auto price |
+| — | `snitchLabels` | — | extra `{ "<address>": "name" }` labels for the Snitch List |
 
 ---
 
 ## Files
 
-- `index.html` — the whole front-end (Canvas 2D scene, HUD, sidebar).
-- `server.js` — zero-dependency backend: RPC poller + mock feed + static server + `/api/state`.
+- `index.html` — the whole front-end (Canvas 2D scene, HUD, feed, snitch list).
+- `server.js` — zero-dependency backend: RPC poller, chain auto-detect, snitch
+  harvester, mock feed, static server, `/api/state` + `/api/snitch`.
+- `start.sh` — one-command startup: node + RPC wait + visualizer, `testnet`/`mainnet` aware.
 - `config.example.json` — copy to `config.json` to configure without env vars.
+- `snitch-labels.json` — names for known transparent addresses (pools, treasury).
+- `veil-mark.svg` — the Veil brand mark (from the official presskit), used on the ship
+  and worn as the "V" on every Veilian's face.
 
 ## Notes
 
-- Veil is multi-algorithm; `getblockchaininfo.difficulty` reports a single value, so the
-  difficulty stat is indicative — refine per-algo if you need it exact.
-- `getrawtransaction` works on mempool transactions without `txindex`; enable `txindex`
-  only if you also want to resolve confirmed/historical txs.
+- On phones the scene strips down to the essentials: the lane, the ship, and the
+  walkers. Open it from another device via the LAN URL `start.sh` prints.
+- USD figures come from the mainnet market price, so on testnet they're decorative.
+- Rejection is honest: a transaction that boards but isn't in the found block steps
+  back out and waits by the stairs for the next ship.
