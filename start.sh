@@ -6,10 +6,18 @@ cd "$(dirname "$0")"
 
 VEIL_DIR="${VEIL_DIR:-$HOME/Downloads/macosx-binaries}"
 RPC_HOST=127.0.0.1
-RPC_PORT=58812
 RPC_USER=veil
 RPC_PASS=veil
 PORT="${PORT:-8790}"
+
+# "./start.sh testnet" runs everything against the testnet chain (RPC 58813)
+CHAIN_FLAG=""
+RPC_PORT=58812
+if [ "${1:-}" = "testnet" ]; then
+  CHAIN_FLAG="-testnet"
+  RPC_PORT=58813
+  echo "  chain: TESTNET"
+fi
 
 rpc() {
   curl -s --max-time 5 --user "$RPC_USER:$RPC_PASS" \
@@ -27,7 +35,7 @@ else
     exit 1
   fi
   echo "  veild: starting from $VEIL_DIR"
-  ( cd "$VEIL_DIR" && ./veild -daemon >/dev/null 2>&1 )
+  ( cd "$VEIL_DIR" && ./veild $CHAIN_FLAG -daemon >/dev/null 2>&1 )
 fi
 
 # ---- 2. wait for the RPC to answer -----------------------------------------
@@ -51,7 +59,7 @@ done
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "  VeilStreet: already listening on $PORT"
 else
-  nohup node server.js > /tmp/veilstreet.log 2>&1 &
+  VEIL_RPC_PORT=$RPC_PORT nohup node server.js > /tmp/veilstreet.log 2>&1 &
   sleep 2
 fi
 

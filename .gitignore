@@ -4,4 +4,4 @@
 config.json
 node_modules/
 npm-debug.log*
-snitch-addrs.json
+snitch-addrs*.json

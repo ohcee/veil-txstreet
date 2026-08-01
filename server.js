@@ -320,7 +320,10 @@ function startMock() {
 // the biggest transparent addresses we have SEEN, not a chain-wide rich list. The
 // UI must label it that way.
 // ---------------------------------------------------------------------------
-const SNITCH_FILE = path.join(__dirname, "snitch-addrs.json");
+// per-chain harvest file: testnet addresses must not pollute the mainnet set.
+// Mainnet keeps the legacy name so an existing harvest carries over.
+const SNITCH_FILE = path.join(__dirname,
+  CFG.rpcPort === 58812 ? "snitch-addrs.json" : `snitch-addrs-${CFG.rpcPort}.json`);
 // Known operators, so the list doesn't read as if these were private stashes.
 // Edit snitch-labels.json to name more pools/exchanges; config.json may override with
 // { "snitchLabels": { "<address>": "name" } }. Pools that pay to stealth (sv...)
