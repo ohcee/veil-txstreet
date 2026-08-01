@@ -37,7 +37,7 @@ const CFG = {
   port: +(process.env.PORT || fileCfg.port || 8790),
   feed: (process.env.FEED || fileCfg.feed || "rpc").toLowerCase(),
   rpcHost: process.env.VEIL_RPC_HOST || fileCfg.rpcHost || "127.0.0.1",
-  rpcPort: +(process.env.VEIL_RPC_PORT || fileCfg.rpcPort || 58812),
+  rpcPort: +(process.env.VEIL_RPC_PORT || fileCfg.rpcPort || 0) || 0,   // 0 = auto-detect mainnet/testnet
   rpcUser: process.env.VEIL_RPC_USER || fileCfg.rpcUser || "",
   rpcPass: process.env.VEIL_RPC_PASS || fileCfg.rpcPass || "",
   rpcCookie: process.env.VEIL_RPC_COOKIE || fileCfg.rpcCookie || "",
@@ -99,6 +99,24 @@ function rpcAuth() {
   if (CFG.rpcUser) return `${CFG.rpcUser}:${CFG.rpcPass}`;
   return "";
 }
+// When no port is pinned (env/config), find whichever chain's node is up —
+// mainnet's 58812 first, then testnet's 58813 — and lock onto it.
+let rpcPortLocked = CFG.rpcPort > 0;
+async function detectPort() {
+  for (const p of [58812, 58813]) {
+    CFG.rpcPort = p;
+    try {
+      const info = await rpc("getblockchaininfo");
+      rpcPortLocked = true;
+      initSnitch();                          // the harvest file is per-chain, so only now
+      console.log(`  auto-detected ${info.chain} chain  (RPC ${p})`);
+      return true;
+    } catch (_) {}
+  }
+  CFG.rpcPort = 0;
+  return false;
+}
+
 let rpcId = 0;
 function rpc(method, params = []) {
   return new Promise((resolve, reject) => {
@@ -190,6 +208,10 @@ let warned = false;
 
 async function poll() {
   try {
+    if (!rpcPortLocked && !(await detectPort())) {
+      stats = { ...stats, mode: "offline", updated: Date.now() };
+      return;                                // neither node answered; try again next poll
+    }
     const info = await rpc("getblockchaininfo");
     const mining = await rpc("getmininginfo").catch(() => null);
     const mem = await rpc("getmempoolinfo").catch(() => ({ size: 0 }));
@@ -321,9 +343,17 @@ function startMock() {
 // UI must label it that way.
 // ---------------------------------------------------------------------------
 // per-chain harvest file: testnet addresses must not pollute the mainnet set.
-// Mainnet keeps the legacy name so an existing harvest carries over.
-const SNITCH_FILE = path.join(__dirname,
-  CFG.rpcPort === 58812 ? "snitch-addrs.json" : `snitch-addrs-${CFG.rpcPort}.json`);
+// Mainnet keeps the legacy name so an existing harvest carries over. Resolved only
+// once the RPC port is known — it may have been auto-detected.
+let snitchFile = null;
+function initSnitch(){
+  snitchFile = path.join(__dirname,
+    CFG.rpcPort === 58812 ? "snitch-addrs.json" : `snitch-addrs-${CFG.rpcPort}.json`);
+  try {                                     // survive restarts so the set keeps growing
+    const raw = JSON.parse(fs.readFileSync(snitchFile, "utf8"));
+    if (raw && raw.addrs) { snitchSeen = new Map(Object.entries(raw.addrs)); backfillAt = raw.backfillAt || null; }
+  } catch (_) {}
+}
 // Known operators, so the list doesn't read as if these were private stashes.
 // Edit snitch-labels.json to name more pools/exchanges; config.json may override with
 // { "snitchLabels": { "<address>": "name" } }. Pools that pay to stealth (sv...)
@@ -339,12 +369,10 @@ let snitchScanning = false;
 let snitchScanned = 0;                     // addresses priced in the last pass
 let backfillAt = null;                     // height the backfill has walked down to
 
-try {                                       // survive restarts so the set keeps growing
-  const raw = JSON.parse(fs.readFileSync(SNITCH_FILE, "utf8"));
-  if (raw && raw.addrs) { snitchSeen = new Map(Object.entries(raw.addrs)); backfillAt = raw.backfillAt || null; }
-} catch (_) {}
+if (rpcPortLocked) initSnitch();            // pinned port: load the harvest right away
 function saveSnitch(){
-  try { fs.writeFileSync(SNITCH_FILE, JSON.stringify({
+  if (!snitchFile) return;
+  try { fs.writeFileSync(snitchFile, JSON.stringify({
     addrs: Object.fromEntries(snitchSeen), backfillAt, saved: Date.now() })); } catch (_) {}
 }
 
@@ -366,7 +394,7 @@ function harvestSnitch(blk){
 
 // price every harvested address against the live UTXO set
 async function rankSnitch(){
-  if (snitchScanning || !snitchSeen.size) return;
+  if (snitchScanning || !rpcPortLocked || !snitchSeen.size) return;
   snitchScanning = true;
   try {
     const byHex = new Map();                       // hex -> address
@@ -408,7 +436,7 @@ async function rankSnitch(){
 // and gap-filled so it never competes with the live poll for the node.
 let backfilling = false;
 async function backfillSnitch(){
-  if (backfilling || CFG.snitchBackfill <= 0) return;   // a pass outlives its interval; don't overlap
+  if (backfilling || !rpcPortLocked || CFG.snitchBackfill <= 0) return;   // a pass outlives its interval; don't overlap
   backfilling = true;
   try { await backfillPass(); } finally { backfilling = false; }
 }
@@ -470,7 +498,7 @@ server.on("error", (e) => {
 });
 server.listen(CFG.port, () => {
   console.log(`\n  VeilStreet  →  http://localhost:${CFG.port}`);
-  console.log(`  feed: ${CFG.feed.toUpperCase()}` + (CFG.feed === "rpc" ? `  (veild ${CFG.rpcHost}:${CFG.rpcPort})` : "") + "\n");
+  console.log(`  feed: ${CFG.feed.toUpperCase()}` + (CFG.feed === "rpc" ? `  (veild ${CFG.rpcHost}:${CFG.rpcPort || "auto-detect"})` : "") + "\n");
   if (CFG.feed === "mock") startMock();
   else {
     poll(); setInterval(poll, CFG.pollMs);
