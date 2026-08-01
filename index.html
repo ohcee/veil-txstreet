@@ -476,6 +476,14 @@
     // the door has to open ABOVE the merge line — below it, base would merge and
     // board on its first frame instead of ever being seen walking
     geo.houseY = geo.bBarY0 + 10 - geo.houseH * 0.5;
+    // TWELVE RingCT portals — one per ring in the signature. They sit in the open band
+    // right of the bushes at the mine's latitude (lower street), two across, six down.
+    geo.ringSpots = [];
+    { const bandL = geo.tRight + 14, bandR = geo.roadX1 - 12;
+      const xs = [bandL + (bandR - bandL) * 0.28, bandL + (bandR - bandL) * 0.72];
+      const yT = geo.bBarY0 + 6, yB = geo.mineY + 6;
+      for (let row = 0; row < 6; row++) for (const x of xs)
+        geo.ringSpots.push({ x, y: yT + (yB - yT) * row / 5 }); }
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -648,6 +656,24 @@
     ctx.fillText("THE TRANSPARENT HOUSE", x, ly);
     ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
   }
+  // the twelve RingCT portals — a RingCT materialises on one of them, then walks
+  // straight down and cuts across to the ship
+  function drawRingPads(time){
+    if (NARROW || !geo.ringSpots) return;
+    const mag = "#d64bff";
+    for (let i = 0; i < geo.ringSpots.length; i++){
+      const p = geo.ringSpots[i], pulse = 0.5 + 0.5*Math.sin(time*2 + i*0.55);
+      const gg = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 15);
+      gg.addColorStop(0, hexA(mag, 0.16 + pulse*0.12)); gg.addColorStop(1, hexA(mag, 0));
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(p.x, p.y, 15, 6, 0, 0, 6.28); ctx.fill();
+      ctx.fillStyle = "rgba(12,6,22,0.75)";
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3, 0, 0, 6.28); ctx.fill();
+      ctx.strokeStyle = hexA(mag, 0.5 + pulse*0.35); ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3, 0, 0, 6.28); ctx.stroke();
+      ctx.strokeStyle = hexA(mag, 0.18 + pulse*0.16); ctx.lineWidth = 1.1;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, 12.5, 4.8, 0, 0, 6.28); ctx.stroke();
+    }
+  }
   function drawGate(time){
     const gx = geo.gateX, gy = geo.gateY, w = 46, h = 16;
     const pulse = 0.5 + 0.5*Math.sin(time*2.2);
@@ -803,8 +829,13 @@
   // size (visual) is driven by transaction vsize — like TxStreet's Monero street,
   // since amounts are hidden on a privacy chain (RingCT/stealth).
   function sizeFromVsize(v){ return Math.max(0.72, Math.min(2.05, 0.5 + Math.log10(Math.max(120, v) / 120) * 0.62)); }
-  // Where a RingCT appears is itself untraceable — no fixed pads, just a random open
-  // spot: either the small ring road, or anywhere the bush field is cut away
+  // RingCT arrives through one of the twelve portals
+  function ringSpot(){
+    const s = geo.ringSpots;
+    if (!s || !s.length) return randomDropPoint();
+    const p = s[(Math.random()*s.length)|0];
+    return { x: p.x + (Math.random()-0.5)*7, y: p.y - 1, direct: true };
+  }
   function randomDropPoint(){
     const yTop = geo.marqueeY + 60, yBot = Math.min(geo.bBarY1, geo.mergeY0 - 30);   // clear of the banner overhead
     for (let i = 0; i < 16; i++){                          // anywhere in the open T corridor
@@ -829,7 +860,7 @@
     const viaHouse = fresh && key === "base";
     const viaGate  = fresh && key === "stealth";
     const viaDrop  = fresh && key === "ringct";
-    const drop = viaDrop ? randomDropPoint() : null;
+    const drop = viaDrop ? ringSpot() : null;
     const spawnX = viaHouse ? geo.houseX + (Math.random()-0.5)*14
                  : viaGate  ? geo.gateX + (Math.random()-0.5)*18
                  : viaDrop  ? drop.x
@@ -851,6 +882,7 @@
       tp: (fresh && !viaHouse) ? 1 : 0,        // 1 = materialising; the house walker just opens a door
       // climb up to the corridor only when the arrival is BELOW the boarding merge
       climbing: (viaGate || viaDrop) && spawnY > geo.mergeY0, climbX: spawnX,
+      direct: !!(drop && drop.direct),          // portal arrivals walk straight down, not via the stem
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
       state: "walking", boards: Math.random() < 0.92,
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
@@ -1184,7 +1216,8 @@
             life: 1, vx:(Math.random()-0.5)*0.4, vy:-(0.2+Math.random()*0.5), r: 1+Math.random()*2 });
         }
         // funnel out of the T's bar and down its stem toward the entrance
-        if (p.y > geo.tBarY1 && p.y < geo.mergeY0) {
+        // (portal arrivals skip this — they're already beside the ship)
+        if (!p.direct && p.y > geo.tBarY1 && p.y < geo.mergeY0) {
           p.x += (geo.tStemC - p.x) * Math.min(1, dt * 1.8);
           p.spawnX = p.x;                       // the later lane merge starts from here
         }
@@ -1272,6 +1305,7 @@
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
     drawStairs(time);          // boarding stairs from the corridor up to the ship
+    drawRingPads(time);        // the twelve RingCT portals, right of the bushes
     drawGate(time);            // the stealth ground portal (cyan) near the bottom
 
     // ambient space debris behind actors: shards + drifting asteroids
@@ -1923,33 +1957,33 @@
       ctx.beginPath(); ctx.arc(x, ly, 7.5, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
       if (on){ ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(x-2.2, ly-2.2, 2.2, 0, 6.28); ctx.fill(); }
     }
-    // "BLOCK FOUND" marquee above the Blockchain sign — dark until a block lands
-    const fx = geo.laneC, fw = 124, fh = 24, fy = geo.gantryY - 42;
-    const fOn = foundTimer > 0;
-    if (NARROW){ /* the marquee spans this width on a phone — the sign would sit on top of it */ }
-    else {
-    const blinkOn = fOn && (foundTimer > 3.2 || Math.sin(foundTimer * 14) > -0.35);   // flicker, then hold
-    const fcol = "#ffcf5a";
-    ctx.fillStyle = fOn ? "#241803" : "#0d0a18";
-    roundRect(fx - fw/2, fy, fw, fh, 5); ctx.fill();
-    ctx.strokeStyle = fOn && blinkOn ? hexA(fcol, 0.95) : "rgba(90,80,130,0.35)";
-    ctx.lineWidth = fOn ? 2 : 1.2;
-    if (fOn && blinkOn){ ctx.shadowColor = fcol; ctx.shadowBlur = 16; }
-    roundRect(fx - fw/2, fy, fw, fh, 5); ctx.stroke(); ctx.shadowBlur = 0;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = "900 12px ui-monospace, monospace";
-    if (fOn && blinkOn){ ctx.fillStyle = fcol; ctx.shadowColor = fcol; ctx.shadowBlur = 12; }
-    else ctx.fillStyle = "rgba(120,110,160,0.30)";                 // unlit bulbs, still legible
-    ctx.fillText("BLOCK FOUND", fx, fy + fh/2 + 0.5);
-    ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
-    }
-
     }
     // big green "Blockchain" sign (arrow above the word) at the head of the lane
     const sx = geo.laneC, sy = geo.gantryY - 8, sw = 112, sh = 46;
     ctx.strokeStyle="#2a1c48"; ctx.lineWidth=4;
     ctx.beginPath(); ctx.moveTo(sx-sw/2+9, 0); ctx.lineTo(sx-sw/2+9, sy+sh); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(sx+sw/2-9, 0); ctx.lineTo(sx+sw/2-9, sy+sh); ctx.stroke();
+
+    // BLOCK FOUND hangs in FRONT of the two strings, just above the Blockchain sign.
+    // Drawn after the posts on purpose — before them the posts struck through it.
+    if (!NARROW){
+      const fw = 124, fh = 24, fy = sy - fh - 7, fx = sx;
+      const fOn = foundTimer > 0;
+      const blinkOn = fOn && (foundTimer > 3.2 || Math.sin(foundTimer * 14) > -0.35);  // flicker, then hold
+      const fcol = "#ffcf5a";
+      ctx.fillStyle = fOn ? "#241803" : "#0d0a18";
+      roundRect(fx - fw/2, fy, fw, fh, 5); ctx.fill();
+      ctx.strokeStyle = fOn && blinkOn ? hexA(fcol, 0.95) : "rgba(90,80,130,0.35)";
+      ctx.lineWidth = fOn ? 2 : 1.2;
+      if (fOn && blinkOn){ ctx.shadowColor = fcol; ctx.shadowBlur = 16; }
+      roundRect(fx - fw/2, fy, fw, fh, 5); ctx.stroke(); ctx.shadowBlur = 0;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = "900 12px ui-monospace, monospace";
+      if (fOn && blinkOn){ ctx.fillStyle = fcol; ctx.shadowColor = fcol; ctx.shadowBlur = 12; }
+      else ctx.fillStyle = "rgba(120,110,160,0.30)";               // unlit bulbs, still legible
+      ctx.fillText("BLOCK FOUND", fx, fy + fh/2 + 0.5);
+      ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
+    }
     ctx.save();
     ctx.fillStyle = "#0c3b24"; ctx.strokeStyle = "rgba(61,255,154,0.85)"; ctx.lineWidth = 2;
     ctx.shadowColor = "rgba(61,255,154,0.55)"; ctx.shadowBlur = 14;
