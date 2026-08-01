@@ -1491,18 +1491,23 @@
     const domeY = y+h*0.09, domeH = h*0.26, domeW = w*0.66, domeCY = domeY+domeH*0.5;
     const pax = b.passengers.filter(p => !p.miner);   // miners are shown as the pilot, not extra heads
 
-    // hull portholes down both sides — one lights for every 3 aboard, so a loaded
-    // ship glows along its flanks before it ever leaves
+    // hull portholes down both sides — one lights for every 3 aboard, and the colour
+    // is the ship's status ladder: green while there's room, yellow as it fills,
+    // bright pulsing red when it's packed — or when the block is running late
     const litPorts = Math.min(8, Math.ceil(pax.length / 3));
+    const blockLate = LIVE && stat.lastBlock > BLOCK_TIME * 2.5;   // same threshold the marquee warms at
+    const packed = pax.length >= 24 || blockLate;
+    const portCol = packed ? "#ff4d3d" : pax.length >= 12 ? "#ffcf5a" : "#3dff9a";
+    const portPulse = packed ? 0.5 + 0.5 * Math.sin(time * 6) : 0;
     for (let i = 0; i < 8; i++){
       const side = (i % 2) ? 1 : -1, row = (i / 2) | 0;
       const px = cx + side * w * 0.285, py = y + h * (0.40 + row * 0.072);
-      const on = i < litPorts;
+      const on = i < litPorts || blockLate;                        // a late block lights the whole flank
       ctx.fillStyle = "#0d1120"; ctx.beginPath(); ctx.arc(px, py, 2.7, 0, 6.28); ctx.fill();
-      ctx.fillStyle = on ? "#ffd98a" : "#141a2e";
-      if (on){ ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 6; }
+      ctx.fillStyle = on ? portCol : "#141a2e";
+      if (on){ ctx.shadowColor = portCol; ctx.shadowBlur = 6 + portPulse * 8; }
       ctx.beginPath(); ctx.arc(px, py, 1.8, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
-      ctx.strokeStyle = on ? "rgba(255,207,90,0.5)" : "rgba(90,100,140,0.35)"; ctx.lineWidth = 0.8;
+      ctx.strokeStyle = on ? hexA(portCol, 0.55 + portPulse * 0.35) : "rgba(90,100,140,0.35)"; ctx.lineWidth = 0.8;
       ctx.beginPath(); ctx.arc(px, py, 2.7, 0, 6.28); ctx.stroke();
     }
 
