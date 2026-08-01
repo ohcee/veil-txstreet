@@ -892,7 +892,7 @@
       climbing: (viaGate || viaDrop) && spawnY > geo.mergeY0, climbX: spawnX,
       direct: !!(drop && drop.direct),          // portal arrivals walk straight down, not via the stem
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
-      state: "walking", boards: Math.random() < 0.92,
+      state: "walking", boards: true,      // every walker is a pending tx bound for the ship
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
       cloak: 0, shards: [], targetBus: null, seat: 0,
     };
@@ -1228,13 +1228,6 @@
         if (!p.direct && p.y > geo.tBarY1 && p.y < geo.mergeY0) {
           p.x += (geo.tStemC - p.x) * Math.min(1, dt * 1.8);
           p.spawnX = p.x;                       // the later lane merge starts from here
-        }
-        // a walker that ISN'T boarding still shouldn't trample the bush field below the
-        // corridor — drift it into the open band right of the bushes and let it walk
-        // off-screen through the portal ground
-        if (!p.boards && !p.climbing && p.y > geo.mergeY0) {
-          const bandC = (geo.tRight + geo.roadX1) / 2 + (p.sway % 1 - 0.5) * 40;
-          p.x += (bandC - p.x) * Math.min(1, dt * 1.6);
         }
         // merge toward lane if boarding. climbers start out BELOW the boarding line
         // (mine and gate are near the bottom), so they must finish climbing first —
