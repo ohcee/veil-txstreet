@@ -934,7 +934,7 @@
     const size = sizeFromVsize(tx.vsize);
     const feePriority = Math.min(1, (tx.fee || 0) / 0.0004);
     // deliberately slow so you can watch them cross; the shielded types amble the most
-    const baseSpd = type.key === "ringct" ? 10 : type.key === "stealth" ? 14 : 22;
+    const baseSpd = type.key === "ringct" ? 14 : type.key === "stealth" ? 18 : 22;
     const speed = baseSpd + feePriority * 8 + Math.random() * 4;   // px/sec
     const p = {
       tx, type, size, speed, spawnX,
