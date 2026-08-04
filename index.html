@@ -472,7 +472,7 @@
     // the roof clears the marquee — with the door opening toward the corridor.
     geo.houseW = Math.max(46, rw * 0.16);
     geo.houseH = geo.houseW * 0.78;
-    geo.houseX = geo.tStemC + geo.tStemW * 0.5 + geo.houseW * 0.7;
+    geo.houseX = geo.tStemC + geo.tStemW * 0.5 + geo.houseW * 0.35;   // left enough to leave the stealth band clear
     geo.houseY = geo.tBarY1 + geo.houseH * 0.6 + 8;
     // TWELVE RingCT portals — one per ring in the signature. They sit in the open band
     // right of the bushes, BELOW the boarding line: the merge sweep and the queue live
@@ -651,9 +651,8 @@
     ctx.fillStyle = sp;
     ctx.beginPath(); ctx.moveTo(dx+1, y0+h); ctx.lineTo(dx+dw-1, y0+h);
     ctx.lineTo(x+dw*1.5, y0+h+26); ctx.lineTo(x-dw*1.5, y0+h+26); ctx.closePath(); ctx.fill();
-    // label: this is the transparent (basecoin) house. Below the house — above the
-    // roof it would sit inside the marquee board that spans the road up here.
-    const ly = y0 + h + 36, lw = Math.max(132, w*1.75);
+    // label above the roof — the house sits low enough now that it clears the marquee
+    const ly = y0 - h*0.42 - 16, lw = Math.max(132, w*1.75);
     ctx.fillStyle = "#0b1220"; roundRect(x - lw/2, ly - 10, lw, 20, 4); ctx.fill();
     ctx.strokeStyle = hexA(warm, 0.85); ctx.lineWidth = 1.5; roundRect(x - lw/2, ly - 10, lw, 20, 4); ctx.stroke();
     ctx.fillStyle = "#ffe6b8"; ctx.shadowColor = warm; ctx.shadowBlur = 7;
@@ -667,6 +666,8 @@
   function drawRingPads(time){
     if (NARROW || !geo.ringSpots) return;
     const mag = "#d64bff";
+    { const xs = geo.ringSpots.map(q=>q.x), ys = geo.ringSpots.map(q=>q.y);
+      originSign((Math.min(...xs)+Math.max(...xs))/2, Math.min(...ys) - 22, "RINGCT PORTALS", mag); }
     for (let i = 0; i < geo.ringSpots.length; i++){
       const p = geo.ringSpots[i], pulse = 0.5 + 0.5*Math.sin(time*2 + i*0.55);
       const gg = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 15);
@@ -679,6 +680,18 @@
       ctx.strokeStyle = hexA(mag, 0.18 + pulse*0.16); ctx.lineWidth = 1.1;
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 12.5, 4.8, 0, 0, 6.28); ctx.stroke();
     }
+  }
+  // small named sign over an arrival point, in that origin's colour
+  function originSign(x, y, text, col){
+    ctx.font = "800 8px ui-monospace, monospace";
+    const w2 = Math.max(74, ctx.measureText(text).width + 18);
+    ctx.fillStyle = "#0b1220"; roundRect(x - w2/2, y - 10, w2, 19, 4); ctx.fill();
+    ctx.strokeStyle = hexA(col, 0.85); ctx.lineWidth = 1.4;
+    roundRect(x - w2/2, y - 10, w2, 19, 4); ctx.stroke();
+    ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 7;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y - 0.5);
+    ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
   }
   function drawGate(time){
     const gx = geo.gateX, gy = geo.gateY, w = 46, h = 16;
@@ -702,6 +715,7 @@
     ctx.beginPath(); ctx.ellipse(gx, gy, w*0.55, h*0.55, 0,0,6.28); ctx.stroke();
     ctx.strokeStyle = `rgba(34,224,214,${(0.22+pulse*0.18).toFixed(3)})`; ctx.lineWidth = 1.4;
     ctx.beginPath(); ctx.ellipse(gx, gy, w*0.82, h*0.82, 0,0,6.28); ctx.stroke();
+    if (!NARROW) originSign(gx, gy - 36, "STEALTH PORTAL", "#22e0d6");
   }
   // lit boarding stairs from the corridor across to the ship
   function drawStairs(time){
