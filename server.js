@@ -100,8 +100,13 @@ function rpcAuth() {
   return "";
 }
 // When no port is pinned (env/config), find whichever chain's node is up —
-// mainnet's 58812 first, then testnet's 58813 — and lock onto it.
-let rpcPortLocked = CFG.rpcPort > 0;
+// mainnet's 58812 first, then testnet's 58813 — and lock onto it. The lock is only
+// as durable as the node behind it: if the chain we detected stops answering for a
+// few polls in a row (say the user swapped testnet for mainnet), release the lock
+// and probe again. A pinned port never re-detects — a pin is a promise.
+const rpcPinned = CFG.rpcPort > 0;
+let rpcPortLocked = rpcPinned;
+let rpcMisses = 0;
 async function detectPort() {
   for (const p of [58812, 58813]) {
     CFG.rpcPort = p;
@@ -295,10 +300,14 @@ async function poll() {
       const mpx = mp[tid], vsize = mpx.vsize || mpx.size || 500;
       push({ kind: "tx", txid: tid, vsize, fee: mpx.fee != null ? mpx.fee : (mpx.fees && mpx.fees.base) || 0, type: heuristicType(vsize), time: mpx.time || Date.now() / 1000 });
     });
-    warned = false;
+    warned = false; rpcMisses = 0;
   } catch (e) {
     stats = { ...stats, mode: "offline", updated: Date.now() };
     if (!warned) { console.warn("[veilstreet] RPC unreachable (" + e.message + ") — serving in OFFLINE/sim mode."); warned = true; }
+    if (!rpcPinned && rpcPortLocked && ++rpcMisses >= 4) {
+      console.log("  chain on RPC " + CFG.rpcPort + " went away — re-detecting");
+      rpcPortLocked = false; rpcMisses = 0; lastHeight = null; known.clear();
+    }
   }
 }
 
@@ -349,6 +358,8 @@ let snitchFile = null;
 function initSnitch(){
   snitchFile = path.join(__dirname,
     CFG.rpcPort === 58812 ? "snitch-addrs.json" : `snitch-addrs-${CFG.rpcPort}.json`);
+  // start clean: on a chain flip the previous chain's harvest must not carry over
+  snitchSeen = new Map(); snitchList = []; snitchAt = 0; snitchScanned = 0; backfillAt = null;
   try {                                     // survive restarts so the set keeps growing
     const raw = JSON.parse(fs.readFileSync(snitchFile, "utf8"));
     if (raw && raw.addrs) { snitchSeen = new Map(Object.entries(raw.addrs)); backfillAt = raw.backfillAt || null; }

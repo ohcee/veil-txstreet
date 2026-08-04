@@ -72,7 +72,13 @@ done
 if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "  VeilStreet: already listening on $PORT"
 else
-  VEIL_RPC_PORT=$RPC_PORT nohup node server.js > /tmp/veilstreet.log 2>&1 &
+  # only pin the chain when it was forced on the command line — otherwise let the
+  # server auto-detect, so swapping nodes later doesn't strand it on a dead port
+  if [ -n "${1:-}" ]; then
+    VEIL_RPC_PORT=$RPC_PORT nohup node server.js > /tmp/veilstreet.log 2>&1 &
+  else
+    nohup node server.js > /tmp/veilstreet.log 2>&1 &
+  fi
   sleep 2
 fi
 
