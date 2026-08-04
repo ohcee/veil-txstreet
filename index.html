@@ -889,6 +889,16 @@
     return { x: geo.tStemC, y: geo.tBarY1 + 14 };
   }
 
+  // Transparent Veilians are the human tier, so they look like humanity: a full range
+  // of skin tones and a few hairstyles, derived from the tx hash so each person keeps
+  // the same face every frame and across refreshes.
+  const SKINS = ["#6b4226","#8d5524","#a0653a","#b3764f","#c68642","#d9a066","#e0ac69","#eec1a1","#f1c27d","#ffdbac","#f5e0d0"];
+  const HAIRS = ["#15151d","#241a12","#3b2717","#57381e","#6b4423","#8c5a2b","#b7803f","#d9b380","#8a2f14","#454b58","#b5b8c4"];
+  function lookFor(hash){
+    const n = hash && hash.length >= 6 ? parseInt(hash.slice(0, 6), 16) : (Math.random() * 0xffffff) | 0;
+    return { skin: SKINS[n % SKINS.length], hair: HAIRS[(n >> 4) % HAIRS.length], style: (n >> 9) % 4 };
+  }
+
   // core factory — used by both the simulation and the live feed
   function addPerson(d) {
     // d.reuseTx: respawn a walking being for a tx already in the feed (used on refresh
@@ -938,6 +948,7 @@
       state: "walking", boards: true,      // every walker is a pending tx bound for the ship
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
       cloak: 0, shards: [], targetBus: null, seat: 0,
+      look: lookFor(tx.hash),
     };
     people.push(p);
     if (!d.reuseTx){ stat.typeCount[type.key]++; addTxToFeed(tx); }   // a reused tx is already counted and in the feed
@@ -1901,10 +1912,21 @@
     ctx.beginPath(); ctx.moveTo(x+4.5*s, y-1*s); ctx.lineTo(x+6.8*s-step*2*s, y+3.4*s); ctx.stroke();
 
     if (level === "human"){
-      // BASE — an ordinary human
-      ctx.fillStyle = "#e9d9c9"; ctx.beginPath(); ctx.arc(x, hy+0.6*s, 4.2*s, 0, 6.28); ctx.fill();
-      ctx.fillStyle = shade(tc,-0.1);
-      ctx.beginPath(); ctx.arc(x, hy-0.4*s, 4.2*s, Math.PI, 2*Math.PI); ctx.fill();
+      // BASE — an ordinary human, each with its own skin tone and hair
+      const lk = p.look || { skin: "#e9d9c9", hair: shade(tc,-0.1), style: 0 };
+      ctx.fillStyle = lk.skin; ctx.beginPath(); ctx.arc(x, hy+0.6*s, 4.2*s, 0, 6.28); ctx.fill();
+      ctx.fillStyle = lk.hair;
+      if (lk.style === 3){                                   // buzz cut — just a fringe
+        ctx.beginPath(); ctx.arc(x, hy-0.4*s, 4.2*s, Math.PI*1.15, Math.PI*1.85); ctx.lineTo(x+2.4*s, hy-1.6*s); ctx.closePath(); ctx.fill();
+      } else {
+        ctx.beginPath(); ctx.arc(x, hy-0.4*s, 4.2*s, Math.PI, 2*Math.PI); ctx.fill();
+      }
+      if (lk.style === 1){                                   // long hair falling past the cheeks
+        roundRect(x-4.9*s, hy-0.8*s, 1.5*s, 4.6*s, 0.7*s); ctx.fill();
+        roundRect(x+3.4*s, hy-0.8*s, 1.5*s, 4.6*s, 0.7*s); ctx.fill();
+      } else if (lk.style === 2){                            // bun on top
+        ctx.beginPath(); ctx.arc(x, hy-4.9*s, 1.5*s, 0, 6.28); ctx.fill();
+      }
       ctx.fillStyle = "#20233a";
       if (!blink){ ctx.beginPath(); ctx.arc(x-1.6*s, hy+0.6*s, 0.85*s,0,6.28); ctx.fill();
                    ctx.beginPath(); ctx.arc(x+1.6*s, hy+0.6*s, 0.85*s,0,6.28); ctx.fill(); }
