@@ -463,19 +463,17 @@
     // the coinbase mine, dug into the lower bushes, with a shaft up to the bottom bar
     geo.mineX = geo.roadX0 + rw * 0.22;
     geo.mineY = geo.bBarY1 + H * 0.17;
-    // the stealth portal — now up top in the corridor, where stealth surfaces and
-    // then walks the full way down (swapped with the RingCT pads)
-    geo.gateX = geo.tStemC;
-    geo.gateY = geo.tBarY1 - 6;
+    // the stealth portal — in the open band right of the bushes, up near the Veilian
+    // with the stoplight. Stealth surfaces there and walks the band straight down.
+    geo.gateX = (geo.tRight + geo.roadX1) / 2;
+    geo.gateY = H * 0.17;
     // basecoin is the transparent tier, so it gets the one arrival you can trace:
-    // it walks out the front door of a lit house. It sits at the left end of the
-    // bottom bar — the top bar is spanned end to end by the gantry board.
+    // a lit house nestled IN the bushes beside the top of the stem — low enough that
+    // the roof clears the marquee — with the door opening toward the corridor.
     geo.houseW = Math.max(46, rw * 0.16);
     geo.houseH = geo.houseW * 0.78;
-    geo.houseX = geo.tLeft + geo.houseW * 0.62;
-    // the door has to open ABOVE the merge line — below it, base would merge and
-    // board on its first frame instead of ever being seen walking
-    geo.houseY = geo.bBarY0 + 10 - geo.houseH * 0.5;
+    geo.houseX = geo.tStemC - geo.tStemW * 0.5 - geo.houseW * 0.6;
+    geo.houseY = geo.tBarY1 + geo.houseH * 0.6 + 8;
     // TWELVE RingCT portals — one per ring in the signature. They sit in the open band
     // right of the bushes, BELOW the boarding line: the merge sweep and the queue live
     // above them, so nobody crosses this ground except the RingCT who arrive on it.
@@ -647,8 +645,9 @@
     ctx.fillStyle = sp;
     ctx.beginPath(); ctx.moveTo(dx+1, y0+h); ctx.lineTo(dx+dw-1, y0+h);
     ctx.lineTo(x+dw*1.5, y0+h+26); ctx.lineTo(x-dw*1.5, y0+h+26); ctx.closePath(); ctx.fill();
-    // label: this is the transparent (basecoin) house
-    const ly = y0 - h*0.42 - 16, lw = Math.max(132, w*1.75);
+    // label: this is the transparent (basecoin) house. Below the house — above the
+    // roof it would sit inside the marquee board that spans the road up here.
+    const ly = y0 + h + 36, lw = Math.max(132, w*1.75);
     ctx.fillStyle = "#0b1220"; roundRect(x - lw/2, ly - 10, lw, 20, 4); ctx.fill();
     ctx.strokeStyle = hexA(warm, 0.85); ctx.lineWidth = 1.5; roundRect(x - lw/2, ly - 10, lw, 20, 4); ctx.stroke();
     ctx.fillStyle = "#ffe6b8"; ctx.shadowColor = warm; ctx.shadowBlur = 7;
@@ -907,7 +906,7 @@
       tp: (fresh && !viaHouse) ? 1 : 0,        // 1 = materialising; the house walker just opens a door
       // climb up to the corridor only when the arrival is BELOW the boarding merge
       climbing: (viaGate || viaDrop) && spawnY > geo.mergeY0, climbX: spawnX,
-      direct: !!(drop && drop.direct),          // portal arrivals walk straight down, not via the stem
+      direct: viaGate || !!(drop && drop.direct),   // portal arrivals walk straight down, not via the stem
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
       state: "walking", boards: true,      // every walker is a pending tx bound for the ship
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
