@@ -302,9 +302,14 @@ async function poll() {
     });
     warned = false; rpcMisses = 0;
   } catch (e) {
-    stats = { ...stats, mode: "offline", updated: Date.now() };
-    if (!warned) { console.warn("[veilstreet] RPC unreachable (" + e.message + ") — serving in OFFLINE/sim mode."); warned = true; }
-    if (!rpcPinned && rpcPortLocked && ++rpcMisses >= 4) {
+    rpcMisses++;
+    // one slow reply isn't an outage — the badge only drops to OFFLINE on the second
+    // consecutive miss, so a busy node doesn't flap the page into sim and back
+    if (rpcMisses >= 2) {
+      stats = { ...stats, mode: "offline", updated: Date.now() };
+      if (!warned) { console.warn("[veilstreet] RPC unreachable (" + e.message + ") — serving in OFFLINE/sim mode."); warned = true; }
+    }
+    if (!rpcPinned && rpcPortLocked && rpcMisses >= 4) {
       console.log("  chain on RPC " + CFG.rpcPort + " went away — re-detecting");
       rpcPortLocked = false; rpcMisses = 0; lastHeight = null; known.clear();
     }
