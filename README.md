@@ -2,9 +2,10 @@
 
 A live, TxStreet-style visualizer for **Veil (VEIL)** — set in space, because Veil's
 community used to call themselves **Veilians**. Every mempool transaction is a Veilian
-walking to the mothership (the forming block); when the network finds a block, the
-BLOCK FOUND sign flickers on, everyone the block accepted rushes up the boarding
-stairs, and the ship lifts off toward the chain.
+walking to the mothership (the forming block), boarding as they arrive. When the
+network finds a block, the BLOCK FOUND sign flickers on and the ship lifts off with
+everyone the block accepted — anyone it turned away steps off, sits out a few seconds
+by the stairs, and catches the next ship.
 
 How private a transaction is decides what its Veilian looks like **and how it
 arrives** — the arrival is a picture of its traceability:
@@ -23,8 +24,8 @@ priority.
 
 Reading the ship: the dome is a glass viewport into the cabin, and the **portholes are
 a load gauge** — one light per ten transactions waiting or aboard, all yellow at 90,
-all red past 100. The crowd at the stairs stands still while the chain is healthy and
-starts fidgeting when the block runs late; the marquee clock heats up with it.
+all red past 100. Anyone waiting by the stairs stands still while the chain is healthy
+and starts fidgeting when the block runs late; the marquee clock heats up with it.
 
 Built with a zero-dependency Node backend (`server.js`) and a single self-contained
 `index.html` (pure Canvas 2D — no build step, no npm install).
@@ -156,4 +157,6 @@ All optional. Env var overrides `config.json` overrides the built-in default.
   walkers. Open it from another device via the LAN URL `start.sh` prints.
 - USD figures come from the mainnet market price, so on testnet they're decorative.
 - Rejection is honest: a transaction that boards but isn't in the found block steps
-  back out and waits by the stairs for the next ship.
+  off, sits out a few seconds by the stairs, and boards the next ship. The reverse
+  holds too — a walker whose tx made the block beams aboard as it lifts off, never
+  left behind to ride a ship its transaction isn't in.

@@ -754,7 +754,7 @@
         const m = people.find(p => p.miner && p.state === "walking" && !p.climbing && p.y > geo.mergeY0);
         if (m) { m.state = "riding"; m.targetBus = lead; if (!lead.passengers.includes(m)) lead.passengers.push(m); }
       }
-      lead.state = "loading"; lead.loadT = 3.2;  // hold at the pad while the crowd floods in
+      lead.state = "leaving"; lead.vy = -1.4;   // drive up toward the Blockchain sign
       // only ride along if the block actually took you. we can only judge that when the
       // block's txid list is complete (the server caps it), otherwise assume everyone made it.
       const accepted = (block && block.txids && block.txids.length &&
@@ -766,26 +766,32 @@
           // the block didn't take it: step off and go back to the foot of the stairs,
           // above the merge, so it visibly re-walks the final approach and re-boards
           // the NEXT ship instead of teleport-boarding in place from below the line.
-          c.state = "walking"; c.targetBus = null; c.seat = 0; c.boards = true; c.climbing = false; c.rushing = false; c.qx = null; c.idle = false;
+          c.state = "walking"; c.targetBus = null; c.seat = 0; c.boards = true; c.climbing = false; c.qx = null; c.idle = false;
           c.x = geo.roadX1 - 6 + (Math.random()-0.5)*12;   // step off, back to the foot of the stairs
-          c.y = geo.mergeY0 + 6 + Math.random()*10;        // just below the merge, so it re-climbs and re-boards
+          c.y = geo.mergeY0 + 6 + Math.random()*10;
           c.spawnX = c.x; c.tp = 0;
+          c.waitT = 2.5 + Math.random() * 2.5;             // sit out a few seconds, then catch the next ship
         } else c.state = "riding";
       }
       lead.passengers = lead.passengers.filter(c => c.state === "riding");
-      // BLOCK FOUND: everyone the block took sprints aboard, staggered so they stream
-      // up the stairs instead of teleporting in. (accepted === null = can't judge, so
-      // the whole queue goes.) The rest keep waiting for the next ship.
-      let k = 0;
-      for (const p of people){
-        if (p.state !== "walking" || !p.boards || p.miner) continue;
-        if (!accepted || (p.tx && p.tx.hash && accepted.has(p.tx.hash))){
-          p.rushing = true; p.rushDelay = Math.min(0.8, k++ * 0.045);
+      // and the other direction: anyone still WALKING whose tx made this block goes
+      // with it — beamed aboard in a puff of stardust at the last second, never left
+      // behind to ride a ship its transaction isn't in
+      if (accepted){
+        for (const p of people){
+          if (p.state !== "walking" || p.miner || !p.tx || !p.tx.hash) continue;
+          if (accepted.has(p.tx.hash)){
+            p.state = "riding"; p.targetBus = lead;
+            p.seat = lead.passengers.length; lead.passengers.push(p);
+            for (let k = 0; k < 10; k++) p.shards.push({ x: p.x + (Math.random()-0.5)*20, y: p.y - 8,
+              life: 1, vx: (Math.random()-0.5)*0.8, vy: -(0.4+Math.random()*0.8), r: 1+Math.random()*2 });
+          }
         }
       }
     }
     light = "green"; lightTimer = 2.4;
-    // (the next mothership warps in once this one finishes loading and lifts off)
+    // next mothership warps in from downstream
+    buses.push(makeBus(true));
     blockClock = BLOCK_TIME;
     beltBurst = 1.6;                 // the walkway surges forward as the block lands
     flash = 1; flashColor = algoOf(algo).color;
@@ -1207,23 +1213,12 @@
       if (b.state === "arriving") {
         b.y += (geo.busY - b.y) * Math.min(1, dt * 3.2);
         if (Math.abs(b.y - geo.busY) < 1.5) { b.y = geo.busY; b.state = "waiting"; }
-      } else if (b.state === "loading") {
-        b.y += (geo.busY - b.y) * Math.min(1, dt * 3.2);   // in case the block caught it still flying in
-        b.loadT -= dt;
-        const pending = people.some(p => p.rushing && p.state === "walking");
-        if (b.loadT <= 0 || !pending){
-          // doors close. Anyone accepted but not through the hatch shimmers out —
-          // their tx is in the block either way, they just cut it fine.
-          for (const p of people) if (p.rushing && p.state === "walking") p.state = "gone";
-          b.state = "leaving"; b.vy = -1.4;                 // drive up toward the Blockchain sign
-          buses.push(makeBus(true));                       // next mothership warps in behind it
-        }
       } else if (b.state === "leaving") {
         b.vy -= dt * 2.2; b.y += b.vy * dt * 60;   // accelerate upward toward the chain
       }
     }
     buses = buses.filter(b => !(b.state === "leaving" && b.y < -geo.busH - 60));
-    const boardingBus = buses.find(b => b.state === "waiting" || b.state === "loading");
+    const boardingBus = buses.find(b => b.state === "waiting");
 
     // people
     for (const p of people) {
@@ -1241,28 +1236,13 @@
           if (p.y <= geo.mergeY0 + 6){ p.climbing = false; p.spawnX = p.x; }
         }
         else if (!(p.tp > 0.45)) {
-          const loadingBus = buses.find(b => b.state === "loading");
-          if (p.rushing && loadingBus && !p.climbing){
-            p.idle = false; p.qx = null;          // out of the queue, up the ladder
-            // doors are open — sprint to the hatch and pile in
-            if (p.rushDelay > 0) p.rushDelay -= dt;
-            else {
-              p.x += (geo.laneC - p.x) * Math.min(1, dt * 6);
-              const ty = geo.boardY - 26, dy = ty - p.y;
-              p.y += Math.sign(dy) * Math.min(Math.abs(dy), 210 * dt);
-              if (Math.abs(dy) < 4 && Math.abs(p.x - geo.laneC) < 9 && loadingBus.passengers.length < 240){
-                p.state = "boarded"; p.targetBus = loadingBus; p.rushing = false;
-                p.seat = loadingBus.passengers.length; loadingBus.passengers.push(p);
-                for (let k=0;k<8;k++) p.shards.push({ x: geo.laneC+(Math.random()-0.5)*24, y: geo.boardY-Math.random()*20,
-                  life:1, vx:(Math.random()-0.5)*0.8, vy:-(0.3+Math.random()*0.6), r:1+Math.random()*2 });
-              }
-            }
-          }
-          else if (p.boards && !p.miner && p.y >= geo.mergeY0 + 6){
-            // the crowd WAITS by the loading stairs until the block is found — each
-            // one picks a fixed spot at the ladder's foot ONCE and stands there.
-            // (deriving the spot from phase/sway looked right but those advance every
-            // frame for the walk cycle, so the whole crowd used to vibrate.)
+          const sitOut = p.waitT > 0;
+          if (sitOut) p.waitT -= dt;
+          if (sitOut || (p.boards && !p.miner && !boardingBus && p.y >= geo.mergeY0 + 6)){
+            // waiting by the stairs: either the last ship turned it away (sit out a few
+            // seconds, then catch the next one) or there's no ship at the pad right now.
+            // Each picks a fixed spot ONCE and stands there — a spot derived from
+            // phase/sway would vibrate, since those advance every frame.
             if (p.qx == null){
               p.qx = geo.roadX1 - 10 + (Math.random() - 0.5) * 28;
               p.qy = geo.mergeY0 + 10 + Math.random() * (geo.boardY - geo.mergeY0 - 22);
@@ -1271,7 +1251,11 @@
             p.y += (p.qy - p.y) * Math.min(1, dt * 3) + Math.cos(p.sway * 23) * antsy * 1.1;
             p.idle = true;                        // stand at ease, don't march in place
           }
-          else if (!(p.boards && p.y >= geo.boardY)) p.y += p.speed * rush * dt;
+          else {
+            if (p.qx != null){ p.qx = null; p.spawnX = p.x; }   // leaving the wait spot: merge from here
+            p.idle = false;
+            if (!(p.boards && p.y >= geo.boardY)) p.y += p.speed * rush * dt;
+          }
         }
         // veil shard emission for shielded
         if (p.type.key !== "base" && Math.random() < dt * (p.type.key === "ringct" ? 7 : 3)) {
@@ -1287,15 +1271,16 @@
         // merge toward lane if boarding. climbers start out BELOW the boarding line
         // (mine and gate are near the bottom), so they must finish climbing first —
         // otherwise they'd merge and board on their very first frame.
-        if (!p.climbing && p.miner && boardingBus && p.y > geo.mergeY0) {
+        if (!p.climbing && p.boards && !(p.waitT > 0) && boardingBus && p.y > geo.mergeY0) {
           const f = ease(Math.min(1, (p.y - geo.mergeY0) / (geo.boardY - geo.mergeY0)));
           p.x = p.spawnX + (geo.laneC - p.spawnX) * f;
         }
-        // board on arrival: only the coinbase pilot — the crowd waits for BLOCK FOUND
-        if (p.miner && !p.climbing && boardingBus && boardingBus.state === "waiting" && p.y >= geo.boardY && boardingBus.passengers.length < 240) {
+        // board on arrival — the ship loads as people show up. If the block turns
+        // one away it steps off, sits out a few seconds, and catches the next ship.
+        if (!p.climbing && p.boards && !(p.waitT > 0) && boardingBus && p.y >= geo.boardY && boardingBus.passengers.length < 240) {
           p.state = "boarded"; p.targetBus = boardingBus;
           p.seat = boardingBus.passengers.length; boardingBus.passengers.push(p);
-          boardingBus.hasPilot = true;                      // the miner walked down and took the helm
+          if (p.miner) boardingBus.hasPilot = true;         // the miner walked down and took the helm
           for (let k=0;k<8;k++) p.shards.push({ x: geo.laneC+(Math.random()-0.5)*24, y: geo.boardY-Math.random()*20,
             life:1, vx:(Math.random()-0.5)*0.8, vy:-(0.3+Math.random()*0.6), r:1+Math.random()*2 });
         }
@@ -1304,7 +1289,7 @@
       for (const s of p.shards){ s.x += s.vx; s.y += s.vy; s.life -= dt*0.9; }
       p.shards = p.shards.filter(s => s.life > 0);
     }
-    queueN = people.reduce((a,p) => a + ((p.state === "walking" && p.boards && !p.miner && !p.rushing && p.y >= geo.mergeY0 + 4) ? 1 : 0), 0);
+    queueN = people.reduce((a,p) => a + ((p.state === "walking" && p.boards && !p.miner && p.y >= geo.mergeY0 + 4) ? 1 : 0), 0);
     const liveBus = new Set(buses);
     people = people.filter(p => {
       if (p.state === "gone") return false;
@@ -1551,7 +1536,7 @@
     // is the ship's status ladder: green while there's room, yellow as it fills,
     // bright pulsing red when it's packed — or when the block is running late
     // while the ship forms, the crowd is OUTSIDE — the ladder reads them plus anyone aboard
-    const loadN = pax.length + ((b.state === "waiting" || b.state === "loading") ? queueN : 0);
+    const loadN = pax.length + (b.state === "waiting" ? queueN : 0);
     const litPorts = Math.min(8, Math.ceil(loadN / 10));           // each porthole = 10 aboard/waiting
     const packed = loadN > 100;                                    // >100: all red
     const portCol = packed ? "#ff4d3d" : loadN >= 90 ? "#ffcf5a" : "#3dff9a";   // 90+: all yellow
