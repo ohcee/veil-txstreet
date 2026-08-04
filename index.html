@@ -746,12 +746,19 @@
       // every block has a coinbase: make sure its miner is aboard before takeoff.
       // if one is still walking, snap it into this ship (it made it just in time).
       if (!lead.hasPilot) {
-        // the block always has a coinbase, so the departing ship shows its pilot...
+        // the block always has a coinbase, so the departing ship shows its pilot — and
+        // the astronaut walking it down goes WITH it, beamed aboard in stardust however
+        // far along it is. Leaving it to serve the next ship meant a fast block flew
+        // off with a pilot while the same astronaut lingered for the following one,
+        // and no fresh astronaut ever came out of the mine.
         lead.hasPilot = true;
-        // ...but only pull a miner aboard if it actually made it to the final approach.
-        // one still climbing out of the mine keeps walking and catches a later ship.
-        const m = people.find(p => p.miner && p.state === "walking" && !p.climbing && p.y > geo.mergeY0);
-        if (m) { m.state = "riding"; m.targetBus = lead; if (!lead.passengers.includes(m)) lead.passengers.push(m); }
+        const m = people.find(p => p.miner && p.state === "walking");
+        if (m) {
+          m.state = "riding"; m.targetBus = lead;
+          if (!lead.passengers.includes(m)) lead.passengers.push(m);
+          for (let k = 0; k < 10; k++) m.shards.push({ x: m.x + (Math.random()-0.5)*20, y: m.y - 8,
+            life: 1, vx: (Math.random()-0.5)*0.8, vy: -(0.4+Math.random()*0.8), r: 1+Math.random()*2 });
+        }
       }
       lead.state = "leaving"; lead.vy = -1.4;   // drive up toward the Blockchain sign
       // only ride along if the block actually took you. we can only judge that when the
