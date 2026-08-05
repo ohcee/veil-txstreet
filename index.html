@@ -394,7 +394,6 @@
         <div class="ratio-seg" style="background:#22e0d6; flex:3" title="Stealth">STEALTH</div>
         <div class="ratio-seg" style="background:#d64bff; flex:5" title="RingCT">RINGCT</div>
       </div>
-      <div class="side-hint">Click any tx or block for its <b>data page</b> — right here, off your own node</div>
     </div>
     <div class="tx-list" id="txList"></div>
     <div class="snitch" id="snitchBox">
@@ -2486,7 +2485,10 @@
         <div class="xp-grid">
           <div class="xp-cell"><b>time</b><span>${new Date(d.time*1000).toLocaleString()} · ${xpAgo(d.time)}</span></div>
           <div class="xp-cell"><b>confirmations</b><span>${d.confirmations.toLocaleString()}</span></div>
+          <div class="xp-cell"><b>block time</b><span>${d.interval != null ? (d.interval < 120 ? d.interval + "s" : Math.round(d.interval/60) + "m " + (d.interval%60) + "s") : "—"}</span></div>
           <div class="xp-cell"><b>transactions</b><span>${d.txcount}</span></div>
+          <div class="xp-cell"><b>visible volume</b><span>${d.visibleOut > 0 ? d.visibleOut.toLocaleString(undefined,{maximumFractionDigits:4}) + " VEIL" + (d.usd > 0 ? " · " + fmtUsd(d.visibleOut * d.usd) : "") : "—"}</span></div>
+          <div class="xp-cell"><b>fees in the clear</b><span>${d.feesVisible > 0 ? d.feesVisible + " VEIL" + (d.usd > 0 ? " · " + fmtUsd(d.feesVisible * d.usd) : "") : "—"}</span></div>
           <div class="xp-cell"><b>size</b><span>${esc(fmtSize(d.size))}</span></div>
           <div class="xp-cell"><b>weight</b><span>${(d.weight||0).toLocaleString()}</span></div>
           <div class="xp-cell"><b>difficulty</b><span>${esc(fmtDiff(d.difficulty||0))}</span></div>
@@ -2495,7 +2497,11 @@
           <div class="xp-cell" style="grid-column:1/-1"><b>merkle root</b><span>${esc(d.merkleroot)}</span></div>
           ${d.powHash ? `<div class="xp-cell" style="grid-column:1/-1"><b>pow hash</b><span>${esc(d.powHash)}</span></div>` : ""}
         </div>
-        <div class="xp-sec">transactions</div>
+        <div class="xp-sec">transactions${Object.keys(d.typeMix || {}).length
+          ? " · " + Object.entries(d.typeMix).map(([k,n]) => {
+              const t = TX_TYPES[k] || TX_TYPES.base;
+              return `<i class="xp-chip" style="background:${hexA(t.color,0.16)};color:${t.color}">${n} ${esc(t.name)}</i>`;
+            }).join("") : ""}</div>
         ${rows}
         <div class="xp-foot"><span></span>
           <a href="${esc(EXPLORER)}/block-height/${d.height}" target="_blank" rel="noopener">Veil explorer ↗</a></div>
@@ -2512,14 +2518,20 @@
     const c = d.context || {};
     const status = c.pending
       ? `<i class="xp-chip" style="background:${hexA("#ffcf5a",0.18)};color:#ffcf5a">IN MEMPOOL</i>`
-      : `<i class="xp-chip" style="background:${hexA("#3dff9a",0.14)};color:#3dff9a">${(c.confirmations||0).toLocaleString()} CONF</i>
+      : (() => { const ca = algoOf(c.algo);
+         return `<i class="xp-chip" style="background:${hexA("#3dff9a",0.14)};color:#3dff9a">${(c.confirmations||0).toLocaleString()} CONF</i>
          <span style="font-size:11px;color:var(--text-dim)">in block
          <a style="color:var(--veil-cyan);cursor:pointer" data-goblock="${esc(String(c.height))}">#${(c.height||0).toLocaleString()}</a>
-         · ${c.time ? esc(xpAgo(c.time)) : ""}</span>`;
+         <i class="xp-chip" style="background:${hexA(ca.color,0.16)};color:${ca.color}">${esc(ca.label)}</i>
+         ${c.index != null ? `tx ${c.index + 1} of ${c.of} · ` : ""}${c.time ? esc(xpAgo(c.time)) : ""}</span>`; })();
     const vinHtml = d.vin.map(v => {
       if (v.kind === "coinbase") return `<div class="xp-io-item"><span class="v">block reward</span> — newly minted</div>`;
       if (v.kind === "zerocoinspend") return `<div class="xp-io-item"><span class="v">zerocoin spend</span>${v.denomination ? " — denom " + esc(v.denomination) : ""}</div>`;
-      if (v.kind === "anon") return `<div class="xp-io-item"><span class="hid">RingCT ring</span> — ${esc(String(v.inputs||"?"))} input(s), ring size ${esc(String(v.ringSize||"?"))}<br>real spender hidden among decoys</div>`;
+      if (v.kind === "anon"){
+        const ring = (v.ring || []).map(m =>
+          `<div style="cursor:pointer;color:var(--text-faint)" data-gotx="${esc(m)}" title="a ring member — possibly the real source, probably a decoy">↳ ${esc(short(m, 10, 8))}</div>`).join("");
+        return `<div class="xp-io-item"><span class="hid">RingCT ring</span> — ${esc(String(v.inputs||"?"))} input(s), ring size ${esc(String(v.ringSize||"?"))}<br>real spender hidden among decoys${ring ? `<div style="margin-top:5px">${ring}</div>` : ""}</div>`;
+      }
       return `<div class="xp-io-item" data-gotx="${esc(v.txid||"")}" style="cursor:pointer" title="open the funding tx">
         ${esc(short(v.txid||"?", 10, 8))} <span style="color:var(--text-faint)">: ${esc(String(v.vout))}</span></div>`;
     }).join("") || `<div class="xp-io-item">—</div>`;
@@ -2528,7 +2540,8 @@
       if (v.hidden) return `<div class="xp-io-item"><span class="hid">amount hidden</span> — ${esc(v.kind)} output${v.commitment ? `<br>commitment ${esc(v.commitment)}…` : ""}</div>`;
       if (v.kind === "zerocoinmint") return `<div class="xp-io-item">zerocoin mint — <span class="v">${esc(String(v.value||0))} VEIL</span></div>`;
       if (v.kind === "nonstandard" && !(v.value > 0)) return `<div class="xp-io-item" style="opacity:0.55">stake marker</div>`;
-      return `<div class="xp-io-item">${v.address ? esc(short(v.address, 10, 6)) : esc(v.kind)}<br><span class="v">${esc(String(v.value != null ? v.value : "—"))} VEIL</span></div>`;
+      const lbl = v.label ? ` <i class="xp-chip" style="background:${hexA("#ffcf5a",0.16)};color:#ffcf5a">${esc(v.label)}</i>` : "";
+      return `<div class="xp-io-item">${v.address ? esc(short(v.address, 10, 6)) : esc(v.kind)}${lbl}<br><span class="v">${esc(String(v.value != null ? v.value : "—"))} VEIL</span>${v.value > 0 && stat.usd > 0 ? ` <span style="color:var(--text-faint)">${fmtUsd(v.value * stat.usd)}</span>` : ""}</div>`;
     }).join("") || `<div class="xp-io-item">—</div>`;
     const usd = stat.usd > 0 && d.valueOut > 0 ? ` <span style="color:var(--text-faint)">(${fmtUsd(d.valueOut * stat.usd)})</span>` : "";
     xpShow(`
@@ -2543,7 +2556,8 @@
         <div style="margin:10px 0 0">${status}</div>
         <div class="xp-grid">
           <div class="xp-cell"><b>visible out</b><span>${d.valueOut > 0 ? esc(d.valueOut.toLocaleString(undefined,{maximumFractionDigits:8})) + " VEIL" + usd : (d.type === "ringct" ? "hidden" : "—")}</span></div>
-          <div class="xp-cell"><b>fee</b><span>${d.ctFee != null ? esc(String(d.ctFee)) + " VEIL" : "—"}</span></div>
+          <div class="xp-cell"><b>fee</b><span>${d.ctFee != null ? esc(String(d.ctFee)) + " VEIL" + (stat.usd > 0 ? " · " + fmtUsd(d.ctFee * stat.usd) : "") : "—"}</span></div>
+          <div class="xp-cell"><b>fee rate</b><span>${d.ctFee != null && d.vsize ? (d.ctFee / (d.vsize/1000)).toFixed(5) + " VEIL/kB" : "—"}</span></div>
           <div class="xp-cell"><b>vsize</b><span>${esc(fmtSize(d.vsize))}</span></div>
           <div class="xp-cell"><b>size</b><span>${esc(fmtSize(d.size))}</span></div>
           <div class="xp-cell"><b>locktime</b><span>${esc(String(d.locktime))}</span></div>

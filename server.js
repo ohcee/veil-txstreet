@@ -518,6 +518,12 @@ async function apiBlock(id){
   if (blockCache.has(hash)) return blockCache.get(hash);
   const b = await rpc("getblock", [hash, 2]);
   const isPos = detectAlgo(b) === "pos";
+  // how long this block took: its timestamp minus its parent's
+  let interval = null;
+  if (b.previousblockhash){
+    const ph = await rpc("getblockheader", [b.previousblockhash]).catch(() => null);
+    if (ph && ph.time) interval = Math.max(0, b.time - ph.time);
+  }
   const payload = {
     ok: true, height: b.height, hash: b.hash,
     prev: b.previousblockhash || null, next: b.nextblockhash || null,
@@ -526,9 +532,17 @@ async function apiBlock(id){
     difficulty: b.difficulty, proofType: b.proof_type || "", algo: detectAlgo(b),
     powHash: b.progproofofworkhash || b.randomxproofofworkhash || b.sha256dproofofworkhash || null,
     superblock: isSuperblock(b.height), confirmations: b.confirmations,
-    txcount: (b.tx || []).length,
+    txcount: (b.tx || []).length, interval,
     txs: (b.tx || []).map((t, i) => summarizeTx(t, i, isPos)),
   };
+  // roll up what the block moved in the clear, and its type mix
+  let vol = 0, fees = 0; const mix = {};
+  for (const t of payload.txs){
+    if (t.kind === "tx"){ vol += t.out; mix[t.type] = (mix[t.type] || 0) + 1; }
+    if (t.ctFee != null) fees += t.ctFee;
+  }
+  payload.visibleOut = +vol.toFixed(8); payload.feesVisible = +fees.toFixed(8);
+  payload.typeMix = mix; payload.usd = usdPrice;
   blockCache.set(hash, payload);
   if (blockCache.size > 40){ for (const k of blockCache.keys()){ blockCache.delete(k); break; } }
   return payload;
@@ -536,7 +550,11 @@ async function apiBlock(id){
 function shapeVin(vin){
   if (vin.coinbase != null) return { kind: "coinbase" };
   if (vin.type === "zerocoinspend") return { kind: "zerocoinspend", denomination: vin.denomination };
-  if (vin.type === "anon") return { kind: "anon", ringSize: vin.ring_size, inputs: vin.num_inputs };
+  if (vin.type === "anon"){
+    // the ring: every txid referenced as a possible source — one real, the rest decoys
+    const ring = [...new Set((vin.ringct_inputs || []).map(r => r.txid).filter(Boolean))].slice(0, 12);
+    return { kind: "anon", ringSize: vin.ring_size, inputs: vin.num_inputs, ring };
+  }
   return { kind: "standard", txid: vin.txid, vout: vin.vout };
 }
 function shapeVout(v){
@@ -544,7 +562,10 @@ function shapeVout(v){
   const o = { n: voutIndex(v), kind: k };
   if (typeof v.value === "number") o.value = v.value;
   const addrs = (v.scriptPubKey || {}).addresses;
-  if (addrs && addrs.length) o.address = addrs[0];
+  if (addrs && addrs.length){
+    o.address = addrs[0];
+    if (SNITCH_LABELS[o.address]) o.label = SNITCH_LABELS[o.address];   // fastpool, budget…
+  }
   if (k === "ringct" || k === "ct" || k === "blind"){
     o.hidden = true;
     if (v.valueCommitment) o.commitment = String(v.valueCommitment).slice(0, 16);
@@ -563,9 +584,13 @@ async function apiTx(id, blockHint){
   }
   if (where){
     const b = await rpc("getblock", [where.hash, 2]);
-    tx = (b.tx || []).find(t => t.txid === id);
-    if (tx) ctx = { height: b.height, blockhash: b.hash, time: b.time,
-                    confirmations: b.confirmations, algo: detectAlgo(b), pending: false };
+    const idx = (b.tx || []).findIndex(t => t.txid === id);
+    if (idx >= 0){
+      tx = b.tx[idx];
+      ctx = { height: b.height, blockhash: b.hash, time: b.time,
+              confirmations: b.confirmations, algo: detectAlgo(b), pending: false,
+              index: idx, of: (b.tx || []).length };
+    }
   }
   if (!tx){
     // not in a block we know — the mempool can answer for pending txs
@@ -623,7 +648,10 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(__dirname)) { res.writeHead(403); res.end("forbidden"); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end("not found"); return; }
-    res.writeHead(200, { "Content-Type": MIME[path.extname(file)] || "application/octet-stream" });
+    const ext = path.extname(file);
+    res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream",
+      // the page itself must never be stale — a refresh should always pick up new code
+      "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=300" });
     res.end(data);
   });
 });
