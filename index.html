@@ -721,26 +721,26 @@
     const mag = "#d64bff";
     { const xs = geo.ringSpots.map(q=>q.x), ys = geo.ringSpots.map(q=>q.y);
       originSign((Math.min(...xs)+Math.max(...xs))/2, Math.min(...ys) - 22, "RINGCT PORTALS", mag); }
+    // DARK at rest. The portals are barely-there embers until a RingCT actually
+    // lands — then all twelve blaze at once and the veil lights up from beneath.
     for (let i = 0; i < geo.ringSpots.length; i++){
-      const p = geo.ringSpots[i], pulse = Math.min(1, 0.5 + 0.5*Math.sin(time*2 + i*0.55) + ringFlash);
-      if (ringFlash > 0){
-        // an arrival: every portal fires its beam at once — decoys and the real one,
-        // indistinguishable by design
-        const bg = ctx.createLinearGradient(p.x, p.y - 34, p.x, p.y);
-        bg.addColorStop(0, hexA(mag, 0)); bg.addColorStop(1, hexA(mag, 0.35 * ringFlash));
+      const p = geo.ringSpots[i];
+      const idle = 0.04 + 0.03 * Math.sin(time*1.6 + i*0.55);        // a hint that something is there
+      const lit = ringFlash;
+      if (lit > 0){
+        const bg = ctx.createLinearGradient(p.x, p.y - 40, p.x, p.y);
+        bg.addColorStop(0, hexA(mag, 0)); bg.addColorStop(1, hexA(mag, 0.55 * lit));
         ctx.fillStyle = bg;
-        ctx.beginPath(); ctx.moveTo(p.x - 3, p.y - 34); ctx.lineTo(p.x + 3, p.y - 34);
-        ctx.lineTo(p.x + 7, p.y); ctx.lineTo(p.x - 7, p.y); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(p.x - 3, p.y - 40); ctx.lineTo(p.x + 3, p.y - 40);
+        ctx.lineTo(p.x + 8, p.y); ctx.lineTo(p.x - 8, p.y); ctx.closePath(); ctx.fill();
+        const gg = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 17);
+        gg.addColorStop(0, hexA(mag, 0.55 * lit)); gg.addColorStop(1, hexA(mag, 0));
+        ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(p.x, p.y, 17, 7, 0, 0, 6.28); ctx.fill();
       }
-      const gg = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 15);
-      gg.addColorStop(0, hexA(mag, 0.16 + pulse*0.12)); gg.addColorStop(1, hexA(mag, 0));
-      ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(p.x, p.y, 15, 6, 0, 0, 6.28); ctx.fill();
-      ctx.fillStyle = "rgba(12,6,22,0.75)";
+      ctx.fillStyle = "rgba(10,5,18,0.8)";
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3, 0, 0, 6.28); ctx.fill();
-      ctx.strokeStyle = hexA(mag, 0.5 + pulse*0.35); ctx.lineWidth = 1.6;
+      ctx.strokeStyle = hexA(mag, idle + 0.85 * lit); ctx.lineWidth = 1.6;
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3, 0, 0, 6.28); ctx.stroke();
-      ctx.strokeStyle = hexA(mag, 0.18 + pulse*0.16); ctx.lineWidth = 1.1;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y, 12.5, 4.8, 0, 0, 6.28); ctx.stroke();
     }
   }
   // small named sign over an arrival point, in that origin's colour
@@ -763,16 +763,25 @@
     const w2 = (f.x1 - f.x0) / 2, h2 = (f.y1 - f.y0) / 2;
     ctx.save();
     ctx.beginPath(); ctx.ellipse(cx2, cy2, w2 + 8, h2 + 10, 0, 0, 6.28); ctx.clip();
+    // near-opaque at rest — a dark curtain, not a haze
     const base = ctx.createRadialGradient(cx2, cy2, 4, cx2, cy2, Math.max(w2, h2) + 12);
-    base.addColorStop(0, `rgba(30,14,48,${0.62 + ringFlash * 0.1})`);
-    base.addColorStop(0.75, "rgba(24,11,40,0.55)");
-    base.addColorStop(1, "rgba(18,8,32,0)");
+    base.addColorStop(0, "rgba(16,8,28,0.9)");
+    base.addColorStop(0.72, "rgba(13,6,24,0.84)");
+    base.addColorStop(1, "rgba(10,5,20,0)");
     ctx.fillStyle = base; ctx.fillRect(f.x0 - 12, f.y0 - 14, (w2 + 12) * 2, (h2 + 14) * 2);
-    for (let i = 0; i < 4; i++){                                   // drifting mist banks
+    if (ringFlash > 0){
+      // the arrival: the whole field lights up THROUGH the veil — a bloom under cloth
+      const glow = ctx.createRadialGradient(cx2, cy2, 2, cx2, cy2, Math.max(w2, h2) + 6);
+      glow.addColorStop(0, hexA("#d64bff", 0.42 * ringFlash));
+      glow.addColorStop(0.6, hexA("#9a2fd6", 0.22 * ringFlash));
+      glow.addColorStop(1, hexA("#9a2fd6", 0));
+      ctx.fillStyle = glow; ctx.fillRect(f.x0 - 12, f.y0 - 14, (w2 + 12) * 2, (h2 + 14) * 2);
+    }
+    for (let i = 0; i < 4; i++){                                   // drifting folds in the cloth
       const px = cx2 + Math.sin(time * 0.35 + i * 1.9) * w2 * 0.55;
       const py = cy2 + Math.cos(time * 0.28 + i * 2.4) * h2 * 0.6;
       const pg = ctx.createRadialGradient(px, py, 1, px, py, 34);
-      pg.addColorStop(0, hexA("#b58aff", 0.10 + ringFlash * 0.05));
+      pg.addColorStop(0, hexA("#b58aff", 0.05 + ringFlash * 0.18));
       pg.addColorStop(1, hexA("#b58aff", 0));
       ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(px, py, 34, 20, 0, 0, 6.28); ctx.fill();
     }
@@ -1434,7 +1443,7 @@
     updateAmbient(dt);
     if (flash > 0) flash = Math.max(0, flash - dt * 1.6);
     if (foundTimer > 0) foundTimer = Math.max(0, foundTimer - dt);
-    if (ringFlash > 0) ringFlash = Math.max(0, ringFlash - dt / 1.4);
+    if (ringFlash > 0) ringFlash = Math.max(0, ringFlash - dt / 2.4);
   }
   function ease(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
 
