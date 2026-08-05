@@ -207,6 +207,15 @@ function pumpTx() {
 // RPC poller
 // ---------------------------------------------------------------------------
 const known = new Set();
+// which block a txid landed in — getrawtransaction can't look up confirmed txs
+// without txindex, but getblock(hash,2) can, if we remember where the tx went
+const txWhere = new Map();
+function rememberTx(tid, h, hash){
+  txWhere.set(tid, { h, hash });
+  if (txWhere.size > 9000){                      // FIFO cap; Maps iterate in insertion order
+    for (const k of txWhere.keys()){ txWhere.delete(k); if (txWhere.size <= 8000) break; }
+  }
+}
 let lastHeight = null;
 let tipTime = null;                       // unix time of the tip block (for "time since block")
 let warned = false;
@@ -263,6 +272,7 @@ async function poll() {
             }
             known.delete(tid);
           });
+          for (const tid of txids) rememberTx(tid, h, hash);
           push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000, txids, superblock: isSuperblock(h) });
         } catch (_) {}
       }
@@ -472,6 +482,109 @@ async function backfillPass(){
 }
 
 // ---------------------------------------------------------------------------
+// Explorer pages — our own block and transaction screens, straight off the node.
+// getblock verbosity 2 carries every tx in full, so no txindex is needed: a tx is
+// findable whenever we know its block (txWhere remembers, or the client says), and
+// mempool txs come from getrawtransaction directly.
+// ---------------------------------------------------------------------------
+const HEX64 = /^[0-9a-fA-F]{64}$/;
+const blockCache = new Map();                   // hash -> payload (LRU-ish, small)
+function voutKind(v){
+  return (v.scriptPubKey || {}).type || v.type || "unknown";
+}
+function voutIndex(v){ const n = v["vout.n"]; return n != null ? n : v.n; }   // Veil names it "vout.n"
+function summarizeTx(tx, idx, isPos){
+  let out = 0, nHidden = 0, ctFee = null;
+  for (const v of (tx.vout || [])){
+    const k = voutKind(v);
+    if (typeof v.value === "number" && v.value > 0) out += v.value;
+    if (k === "ringct" || k === "ct" || k === "blind") nHidden++;
+    if (k === "data" && v.ct_fee != null) ctFee = +v.ct_fee;
+  }
+  const vin0 = (tx.vin || [])[0] || {};
+  const kind = idx === 0 ? "coinbase"
+             : (isPos && idx === 1) ? "coinstake"
+             : "tx";
+  return { txid: tx.txid, type: classify(tx), vsize: tx.vsize || tx.size || 0,
+           out: +out.toFixed(8), hidden: nHidden > 0, ctFee,
+           nvin: (tx.vin || []).length, nvout: (tx.vout || []).length, kind,
+           anon: vin0.type === "anon" };
+}
+async function apiBlock(id){
+  let hash = null;
+  if (/^\d+$/.test(id)) hash = await rpc("getblockhash", [+id]);
+  else if (HEX64.test(id)) hash = id;
+  if (!hash) throw new Error("not a height or block hash");
+  if (blockCache.has(hash)) return blockCache.get(hash);
+  const b = await rpc("getblock", [hash, 2]);
+  const isPos = detectAlgo(b) === "pos";
+  const payload = {
+    ok: true, height: b.height, hash: b.hash,
+    prev: b.previousblockhash || null, next: b.nextblockhash || null,
+    time: b.time, mediantime: b.mediantime, size: b.size, weight: b.weight,
+    versionHex: b.versionHex, merkleroot: b.merkleroot, nonce: b.nonce64 || b.nonce,
+    difficulty: b.difficulty, proofType: b.proof_type || "", algo: detectAlgo(b),
+    powHash: b.progproofofworkhash || b.randomxproofofworkhash || b.sha256dproofofworkhash || null,
+    superblock: isSuperblock(b.height), confirmations: b.confirmations,
+    txcount: (b.tx || []).length,
+    txs: (b.tx || []).map((t, i) => summarizeTx(t, i, isPos)),
+  };
+  blockCache.set(hash, payload);
+  if (blockCache.size > 40){ for (const k of blockCache.keys()){ blockCache.delete(k); break; } }
+  return payload;
+}
+function shapeVin(vin){
+  if (vin.coinbase != null) return { kind: "coinbase" };
+  if (vin.type === "zerocoinspend") return { kind: "zerocoinspend", denomination: vin.denomination };
+  if (vin.type === "anon") return { kind: "anon", ringSize: vin.ring_size, inputs: vin.num_inputs };
+  return { kind: "standard", txid: vin.txid, vout: vin.vout };
+}
+function shapeVout(v){
+  const k = voutKind(v);
+  const o = { n: voutIndex(v), kind: k };
+  if (typeof v.value === "number") o.value = v.value;
+  const addrs = (v.scriptPubKey || {}).addresses;
+  if (addrs && addrs.length) o.address = addrs[0];
+  if (k === "ringct" || k === "ct" || k === "blind"){
+    o.hidden = true;
+    if (v.valueCommitment) o.commitment = String(v.valueCommitment).slice(0, 16);
+  }
+  if (k === "data" && v.ct_fee != null) o.ctFee = +v.ct_fee;
+  return o;
+}
+async function apiTx(id, blockHint){
+  if (!HEX64.test(id)) throw new Error("not a txid");
+  let tx = null, ctx = null;
+  let where = txWhere.get(id) || null;
+  if (blockHint && HEX64.test(blockHint)) where = { hash: blockHint, h: null };
+  else if (blockHint && /^\d+$/.test(blockHint)){
+    const hh = await rpc("getblockhash", [+blockHint]).catch(() => null);
+    if (hh) where = { hash: hh, h: +blockHint };
+  }
+  if (where){
+    const b = await rpc("getblock", [where.hash, 2]);
+    tx = (b.tx || []).find(t => t.txid === id);
+    if (tx) ctx = { height: b.height, blockhash: b.hash, time: b.time,
+                    confirmations: b.confirmations, algo: detectAlgo(b), pending: false };
+  }
+  if (!tx){
+    // not in a block we know — the mempool can answer for pending txs
+    tx = await rpc("getrawtransaction", [id, true]).catch(() => null);
+    if (tx) ctx = { pending: true };
+  }
+  if (!tx) throw new Error("transaction not found — not in the mempool, and its block isn't known here. Open it from a block page or the feed.");
+  let out = 0, ctFee = null;
+  for (const v of (tx.vout || [])){
+    if (typeof v.value === "number" && v.value > 0) out += v.value;
+    if (voutKind(v) === "data" && v.ct_fee != null) ctFee = +v.ct_fee;
+  }
+  return { ok: true, txid: tx.txid, type: classify(tx),
+           size: tx.size, vsize: tx.vsize || tx.size, locktime: tx.locktime,
+           context: ctx, valueOut: +out.toFixed(8), ctFee,
+           vin: (tx.vin || []).map(shapeVin), vout: (tx.vout || []).map(shapeVout) };
+}
+
+// ---------------------------------------------------------------------------
 // HTTP server (static + /api/state)
 // ---------------------------------------------------------------------------
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
@@ -484,6 +597,17 @@ const server = http.createServer((req, res) => {
     const payload = { mode: stats.mode, seq, stats: liveStats, events: from < 0 ? [] : since(from) };
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
     res.end(JSON.stringify(payload));
+    return;
+  }
+  if (u.pathname === "/api/block" || u.pathname === "/api/tx") {
+    const wants = u.pathname === "/api/block";
+    const id = (u.searchParams.get("id") || "").trim();
+    const hint = (u.searchParams.get("block") || "").trim();
+    (wants ? apiBlock(id) : apiTx(id, hint))
+      .then(payload => { res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+                         res.end(JSON.stringify(payload)); })
+      .catch(e => { res.writeHead(404, { "Content-Type": "application/json" });
+                    res.end(JSON.stringify({ ok: false, error: e.message })); });
     return;
   }
   if (u.pathname === "/api/snitch") {

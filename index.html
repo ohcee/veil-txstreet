@@ -255,6 +255,55 @@
   .side-hint { font-size: 9px; color: var(--text-faint); letter-spacing: 0.4px; margin-top: 9px; display: flex; align-items: center; gap: 5px; }
   .side-hint b { color: var(--veil-cyan); font-weight: 700; }
 
+  /* ---- in-app explorer pages (block / transaction) ---- */
+  #xp { position: fixed; inset: 0; z-index: 60; display: none;
+    background: rgba(4,2,10,0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #xp.open { display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 4vh 14px; }
+  .xp-card { width: min(760px, 96vw); margin-bottom: 6vh;
+    background: linear-gradient(180deg, #140d26, #0b0718); border: 1px solid var(--border);
+    border-radius: 16px; box-shadow: 0 18px 70px rgba(0,0,0,0.65); overflow: hidden;
+    animation: popin 0.18s ease; }
+  .xp-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+    border-bottom: 1px solid var(--border); background: rgba(10,6,20,0.5); }
+  .xp-kicker { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); }
+  .xp-title { font-size: 17px; font-weight: 800; color: var(--text); font-family: ui-monospace, monospace; }
+  .xp-close { margin-left: auto; cursor: pointer; border: 1px solid var(--border); border-radius: 8px;
+    padding: 4px 10px; color: var(--text-dim); font-size: 13px; background: none; }
+  .xp-close:hover { color: var(--text); border-color: var(--veil-cyan); }
+  .xp-body { padding: 16px 18px 18px; }
+  .xp-chip { display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+    border-radius: 4px; padding: 2px 7px; margin-right: 6px; }
+  .xp-hash { font-family: ui-monospace, monospace; font-size: 11px; color: var(--text-dim);
+    word-break: break-all; cursor: pointer; }
+  .xp-hash:hover { color: var(--veil-cyan); }
+  .xp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 14px 0; }
+  .xp-cell { background: rgba(10,6,20,0.55); border: 1px solid rgba(123,47,214,0.18); border-radius: 9px; padding: 8px 10px; }
+  .xp-cell b { display: block; font-size: 8px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 3px; font-weight: 700; }
+  .xp-cell span { font-size: 12px; color: var(--text); font-family: ui-monospace, monospace; word-break: break-all; }
+  .xp-sec { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); margin: 16px 0 8px; }
+  .xp-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center;
+    padding: 7px 10px; border-radius: 8px; margin: 3px 0; background: rgba(10,6,20,0.4);
+    border: 1px solid rgba(123,47,214,0.12); cursor: pointer; font-family: ui-monospace, monospace; font-size: 11px; }
+  .xp-row:hover { background: rgba(40,24,74,0.55); border-color: rgba(34,224,214,0.35); }
+  .xp-row .amt { color: var(--text); font-weight: 700; }
+  .xp-io { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: start; }
+  .xp-io .arrow { align-self: center; color: var(--veil-cyan); font-size: 18px; }
+  .xp-io-item { background: rgba(10,6,20,0.4); border: 1px solid rgba(123,47,214,0.12); border-radius: 8px;
+    padding: 7px 10px; margin: 4px 0; font-family: ui-monospace, monospace; font-size: 10.5px; color: var(--text-dim); }
+  .xp-io-item .v { color: var(--text); font-weight: 700; }
+  .xp-io-item .hid { color: var(--veil-magenta); font-weight: 700; }
+  .xp-nav { display: flex; gap: 8px; margin-left: 8px; }
+  .xp-nav button { background: none; border: 1px solid var(--border); border-radius: 7px; color: var(--text-dim);
+    cursor: pointer; padding: 3px 9px; font-size: 12px; }
+  .xp-nav button:hover:not(:disabled) { color: var(--text); border-color: var(--veil-cyan); }
+  .xp-nav button:disabled { opacity: 0.3; cursor: default; }
+  .xp-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-faint); }
+  .xp-foot a { color: var(--text-dim); text-decoration: none; }
+  .xp-foot a:hover { color: var(--veil-cyan); }
+  .xp-load { padding: 40px; text-align: center; color: var(--text-dim); font-size: 12px; letter-spacing: 1px; }
+  @media (max-width: 640px){ .xp-io { grid-template-columns: 1fr; } .xp-io .arrow { transform: rotate(90deg); justify-self: center; } }
+
   @media (max-width: 900px) {
     .foot, .stats-chip, .stats-pop { display: none; }   /* phones: just the basics */
     #app { grid-template-columns: 1fr; grid-template-areas: "nav" "stage"; }
@@ -345,7 +394,7 @@
         <div class="ratio-seg" style="background:#22e0d6; flex:3" title="Stealth">STEALTH</div>
         <div class="ratio-seg" style="background:#d64bff; flex:5" title="RingCT">RINGCT</div>
       </div>
-      <div class="side-hint">Click a tx to open it in the <b>Veil explorer&nbsp;↗</b></div>
+      <div class="side-hint">Click any tx or block for its <b>data page</b> — right here, off your own node</div>
     </div>
     <div class="tx-list" id="txList"></div>
     <div class="snitch" id="snitchBox">
@@ -372,6 +421,8 @@
     </aside>
   </div>
 </div>
+
+<div id="xp"><div class="xp-card" id="xpCard"></div></div>
 
 <script>
 "use strict";
@@ -860,8 +911,11 @@
     for (const b of recentBlocks){ const a = algoOf(b.algo);
       const c = document.createElement("div"); c.className = "rb-chip"; c.style.background = a.color;
       c.title = a.name + (b.height ? " · #" + b.height.toLocaleString() : "");
+      if (b.height) { c.dataset.h = b.height; c.style.cursor = "pointer"; }
       frag.appendChild(c); }
     host.replaceChildren(frag);
+    if (!host.dataset.wired){ host.dataset.wired = 1;
+      host.addEventListener("click", (e) => { const h = e.target.dataset && e.target.dataset.h; if (h) xpOpenBlock(+h); }); }
     renderTxList();          // the feed groups transactions under these blocks
   }
 
@@ -992,9 +1046,10 @@
   searchEl.addEventListener("input", () => { searchTerm = searchEl.value.trim().toLowerCase(); renderTxList(); });
   txListEl.addEventListener("click", (e) => {
     const grp = e.target.closest(".grp-block");
-    if (grp){ const bh = grp.getAttribute("data-h"); if (bh) openExt(explorerBlock(+bh)); return; }
+    if (grp){ const bh = grp.getAttribute("data-h"); if (bh) xpOpenBlock(+bh); return; }
     const row = e.target.closest(".tx"); if (!row) return;
-    const h = row.getAttribute("data-hash"); if (h) openExt(explorerTx(h));
+    const h = row.getAttribute("data-hash");
+    if (h) xpOpenTx(h, row.getAttribute("data-bh") || null);
   });
   function addTxToFeed(tx){ recentTx.unshift(tx); if (recentTx.length > 60) recentTx.pop(); renderTxList(); }
   function short(h,a=8,b=6){ return h.length>a+b ? h.slice(0,a)+"…"+h.slice(-b) : h; }
@@ -1004,6 +1059,7 @@
     const elx = document.createElement("div");
     elx.className = "tx"; elx.style.borderLeftColor = barColor;
     elx.setAttribute("data-hash", tx.hash);
+    if (tx.bh != null) elx.setAttribute("data-bh", tx.bh);
     elx.title = "Open transaction in the Veil explorer";
     elx.innerHTML =
       `<div class="tx-ico" style="background:${hexA(t.color,0.16)};color:${t.color}">${t.icon}</div>
@@ -2180,15 +2236,17 @@
   canvas.addEventListener("click", (e) => {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX-rect.left, my = e.clientY-rect.top;
-    // click the block-bus -> open the explorer's block list
+    // click the block-bus -> our own block page (a forming ship has no block yet)
     for (const b of buses){
       if (mx > b.x-geo.busW/2 && mx < b.x+geo.busW/2 && my > b.y && my < b.y+geo.busH){
-        openExt(b.blockHeight!=null ? explorerBlock(b.blockHeight) : explorerBlocks()); return; }
+        if (b.blockHeight != null) xpOpenBlock(b.blockHeight);
+        else if (stat.height) xpOpenBlock(stat.height);     // forming: show the tip it builds on
+        return; }
     }
-    // click a walking figure -> open its transaction in the explorer
+    // click a walking figure -> its transaction page
     let best=null, bd=1e9;
     for (const p of people){ if (p.state!=="walking") continue; const d=Math.hypot(p.x-mx,p.y-my); if(d<bd){bd=d;best=p;} }
-    if (best && bd<34) openExt(explorerTx(best.tx.hash));
+    if (best && bd<34 && best.tx.hash) xpOpenTx(best.tx.hash, null);
   });
 
   // ---------------------------------------------------------------------------
@@ -2355,6 +2413,159 @@
     pollSnitch(); setInterval(pollSnitch, 30000);
   }
 
+  // ---------------------------------------------------------------------------
+  // In-app explorer pages — click a block or a transaction and read it HERE,
+  // off our own node, instead of bouncing to an external site. Deep-linkable:
+  //   #/block/<height|hash>     #/tx/<txid>[@<height|hash>]
+  // ---------------------------------------------------------------------------
+  const xpEl = document.getElementById("xp"), xpCard = document.getElementById("xpCard");
+  const esc = (t) => String(t).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  function xpOpenBlock(id){ location.hash = "/block/" + id; }
+  function xpOpenTx(id, hint){ location.hash = "/tx/" + id + (hint != null ? "@" + hint : ""); }
+  function xpClose(){
+    xpEl.classList.remove("open");
+    if (location.hash) history.pushState(null, "", location.pathname + location.search);
+  }
+  xpEl.addEventListener("click", (e) => { if (e.target === xpEl) xpClose(); });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") xpClose(); });
+  function xpCopy(el, text){
+    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => {
+      const was = el.textContent; el.textContent = "copied ✓";
+      setTimeout(() => { el.textContent = was; }, 900);
+    }).catch(() => {});
+  }
+  xpCard.addEventListener("click", (e) => {
+    const cp = e.target.closest("[data-copy]");
+    if (cp){ xpCopy(cp, cp.getAttribute("data-copy")); return; }
+    const bl = e.target.closest("[data-goblock]");
+    if (bl){ xpOpenBlock(bl.getAttribute("data-goblock")); return; }
+    const tr = e.target.closest("[data-gotx]");
+    if (tr){ xpOpenTx(tr.getAttribute("data-gotx"), tr.getAttribute("data-hint")); return; }
+  });
+  function xpShow(html){ xpCard.innerHTML = html; xpEl.classList.add("open"); xpEl.scrollTop = 0; }
+  function xpFail(kind, msg){
+    xpShow(`<div class="xp-head"><div><div class="xp-kicker">${esc(kind)}</div>
+      <div class="xp-title">not found</div></div>
+      <button class="xp-close" onclick="location.hash=''">✕</button></div>
+      <div class="xp-body"><div class="xp-load">${esc(msg)}</div></div>`);
+  }
+  const xpAgo = (t) => { const d = Math.max(0, Date.now()/1000 - t);
+    return d < 90 ? Math.round(d) + "s ago" : d < 5400 ? Math.round(d/60) + "m ago" : (d/3600).toFixed(1) + "h ago"; };
+
+  async function xpRenderBlock(id){
+    xpShow(`<div class="xp-load">reading block ${esc(short(String(id), 10, 6))} from the node…</div>`);
+    let d; try { d = await (await fetch("/api/block?id=" + encodeURIComponent(id), { cache: "no-store" })).json(); }
+    catch (_) { d = null; }
+    if (!d || !d.ok) return xpFail("block", (d && d.error) || "the node didn't answer");
+    const a = algoOf(d.algo);
+    const rows = d.txs.map(t => {
+      const tt = TX_TYPES[t.type] || TX_TYPES.base;
+      const kind = t.kind === "coinbase" ? `<i class="xp-chip" style="background:${hexA("#ffcf5a",0.18)};color:#ffcf5a">COINBASE</i>`
+                 : t.kind === "coinstake" ? `<i class="xp-chip" style="background:${hexA("#3dff9a",0.16)};color:#3dff9a">COINSTAKE</i>` : "";
+      const amt = t.hidden ? `<span class="hid" style="color:${TX_TYPES.ringct.color}">hidden</span>`
+                : t.out > 0 ? esc(t.out.toLocaleString(undefined, { maximumFractionDigits: 4 })) + " VEIL" : "—";
+      return `<div class="xp-row" data-gotx="${esc(t.txid)}" data-hint="${esc(d.hash)}">
+        <span>${kind}<i class="xp-chip" style="background:${hexA(tt.color,0.18)};color:${tt.color}">${esc(tt.name)}</i></span>
+        <span>${esc(short(t.txid, 14, 10))}</span>
+        <span style="color:var(--text-faint)">${esc(fmtSize(t.vsize))}</span>
+        <span class="amt">${amt}</span></div>`;
+    }).join("");
+    xpShow(`
+      <div class="xp-head">
+        <div><div class="xp-kicker">block${d.superblock ? " · ★ superblock" : ""}</div>
+        <div class="xp-title">#${d.height.toLocaleString()}</div></div>
+        <i class="xp-chip" style="background:${hexA(a.color,0.18)};color:${a.color}">${esc(a.name)}</i>
+        <div class="xp-nav">
+          <button ${d.prev ? `data-goblock="${esc(d.prev)}"` : "disabled"} title="previous block">‹</button>
+          <button ${d.next ? `data-goblock="${esc(d.next)}"` : "disabled"} title="next block">›</button>
+        </div>
+        <button class="xp-close" onclick="location.hash=''">✕</button>
+      </div>
+      <div class="xp-body">
+        <div class="xp-hash" data-copy="${esc(d.hash)}" title="copy block hash">${esc(d.hash)}</div>
+        <div class="xp-grid">
+          <div class="xp-cell"><b>time</b><span>${new Date(d.time*1000).toLocaleString()} · ${xpAgo(d.time)}</span></div>
+          <div class="xp-cell"><b>confirmations</b><span>${d.confirmations.toLocaleString()}</span></div>
+          <div class="xp-cell"><b>transactions</b><span>${d.txcount}</span></div>
+          <div class="xp-cell"><b>size</b><span>${esc(fmtSize(d.size))}</span></div>
+          <div class="xp-cell"><b>weight</b><span>${(d.weight||0).toLocaleString()}</span></div>
+          <div class="xp-cell"><b>difficulty</b><span>${esc(fmtDiff(d.difficulty||0))}</span></div>
+          <div class="xp-cell"><b>nonce</b><span>${esc(String(d.nonce))}</span></div>
+          <div class="xp-cell"><b>version</b><span>${esc(d.versionHex||"")}</span></div>
+          <div class="xp-cell" style="grid-column:1/-1"><b>merkle root</b><span>${esc(d.merkleroot)}</span></div>
+          ${d.powHash ? `<div class="xp-cell" style="grid-column:1/-1"><b>pow hash</b><span>${esc(d.powHash)}</span></div>` : ""}
+        </div>
+        <div class="xp-sec">transactions</div>
+        ${rows}
+        <div class="xp-foot"><span></span>
+          <a href="${esc(EXPLORER)}/block-height/${d.height}" target="_blank" rel="noopener">Veil explorer ↗</a></div>
+      </div>`);
+  }
+
+  async function xpRenderTx(id, hint){
+    xpShow(`<div class="xp-load">reading tx ${esc(short(id, 10, 6))} from the node…</div>`);
+    let d; try { d = await (await fetch("/api/tx?id=" + encodeURIComponent(id) +
+      (hint ? "&block=" + encodeURIComponent(hint) : ""), { cache: "no-store" })).json(); }
+    catch (_) { d = null; }
+    if (!d || !d.ok) return xpFail("transaction", (d && d.error) || "the node didn't answer");
+    const tt = TX_TYPES[d.type] || TX_TYPES.base;
+    const c = d.context || {};
+    const status = c.pending
+      ? `<i class="xp-chip" style="background:${hexA("#ffcf5a",0.18)};color:#ffcf5a">IN MEMPOOL</i>`
+      : `<i class="xp-chip" style="background:${hexA("#3dff9a",0.14)};color:#3dff9a">${(c.confirmations||0).toLocaleString()} CONF</i>
+         <span style="font-size:11px;color:var(--text-dim)">in block
+         <a style="color:var(--veil-cyan);cursor:pointer" data-goblock="${esc(String(c.height))}">#${(c.height||0).toLocaleString()}</a>
+         · ${c.time ? esc(xpAgo(c.time)) : ""}</span>`;
+    const vinHtml = d.vin.map(v => {
+      if (v.kind === "coinbase") return `<div class="xp-io-item"><span class="v">block reward</span> — newly minted</div>`;
+      if (v.kind === "zerocoinspend") return `<div class="xp-io-item"><span class="v">zerocoin spend</span>${v.denomination ? " — denom " + esc(v.denomination) : ""}</div>`;
+      if (v.kind === "anon") return `<div class="xp-io-item"><span class="hid">RingCT ring</span> — ${esc(String(v.inputs||"?"))} input(s), ring size ${esc(String(v.ringSize||"?"))}<br>real spender hidden among decoys</div>`;
+      return `<div class="xp-io-item" data-gotx="${esc(v.txid||"")}" style="cursor:pointer" title="open the funding tx">
+        ${esc(short(v.txid||"?", 10, 8))} <span style="color:var(--text-faint)">: ${esc(String(v.vout))}</span></div>`;
+    }).join("") || `<div class="xp-io-item">—</div>`;
+    const voutHtml = d.vout.map(v => {
+      if (v.kind === "data") return `<div class="xp-io-item">data${v.ctFee != null ? ` — <span class="v">fee ${esc(String(v.ctFee))} VEIL</span>` : ""}</div>`;
+      if (v.hidden) return `<div class="xp-io-item"><span class="hid">amount hidden</span> — ${esc(v.kind)} output${v.commitment ? `<br>commitment ${esc(v.commitment)}…` : ""}</div>`;
+      if (v.kind === "zerocoinmint") return `<div class="xp-io-item">zerocoin mint — <span class="v">${esc(String(v.value||0))} VEIL</span></div>`;
+      if (v.kind === "nonstandard" && !(v.value > 0)) return `<div class="xp-io-item" style="opacity:0.55">stake marker</div>`;
+      return `<div class="xp-io-item">${v.address ? esc(short(v.address, 10, 6)) : esc(v.kind)}<br><span class="v">${esc(String(v.value != null ? v.value : "—"))} VEIL</span></div>`;
+    }).join("") || `<div class="xp-io-item">—</div>`;
+    const usd = stat.usd > 0 && d.valueOut > 0 ? ` <span style="color:var(--text-faint)">(${fmtUsd(d.valueOut * stat.usd)})</span>` : "";
+    xpShow(`
+      <div class="xp-head">
+        <div><div class="xp-kicker">transaction</div>
+        <div class="xp-title" style="font-size:14px">${esc(short(id, 16, 12))}</div></div>
+        <i class="xp-chip" style="background:${hexA(tt.color,0.18)};color:${tt.color}">${esc(tt.name)}</i>
+        <button class="xp-close" onclick="location.hash=''">✕</button>
+      </div>
+      <div class="xp-body">
+        <div class="xp-hash" data-copy="${esc(id)}" title="copy txid">${esc(id)}</div>
+        <div style="margin:10px 0 0">${status}</div>
+        <div class="xp-grid">
+          <div class="xp-cell"><b>visible out</b><span>${d.valueOut > 0 ? esc(d.valueOut.toLocaleString(undefined,{maximumFractionDigits:8})) + " VEIL" + usd : (d.type === "ringct" ? "hidden" : "—")}</span></div>
+          <div class="xp-cell"><b>fee</b><span>${d.ctFee != null ? esc(String(d.ctFee)) + " VEIL" : "—"}</span></div>
+          <div class="xp-cell"><b>vsize</b><span>${esc(fmtSize(d.vsize))}</span></div>
+          <div class="xp-cell"><b>size</b><span>${esc(fmtSize(d.size))}</span></div>
+          <div class="xp-cell"><b>locktime</b><span>${esc(String(d.locktime))}</span></div>
+        </div>
+        <div class="xp-io">
+          <div><div class="xp-sec">inputs</div>${vinHtml}</div>
+          <div class="arrow">➜</div>
+          <div><div class="xp-sec">outputs</div>${voutHtml}</div>
+        </div>
+        <div class="xp-foot"><span></span>
+          <a href="${esc(explorerTx(id))}" target="_blank" rel="noopener">Veil explorer ↗</a></div>
+      </div>`);
+  }
+
+  function routeXp(){
+    const m = location.hash.match(/^#\/(block|tx)\/([^@]+)(?:@(.+))?$/);
+    if (!m){ xpEl.classList.remove("open"); return; }
+    if (m[1] === "block") xpRenderBlock(m[2]);
+    else xpRenderTx(m[2], m[3] || null);
+  }
+  window.addEventListener("hashchange", routeXp);
+
   // Boot
   resize();
   initBuses();
@@ -2365,6 +2576,7 @@
   setInterval(saveState, 2000);
   window.addEventListener("beforeunload", saveState);
   pollFeed(); setInterval(pollFeed, 1200);
+  routeXp();                                 // deep link straight into a block/tx page
   lastTick = performance.now();
   requestAnimationFrame(frame);
 })();
