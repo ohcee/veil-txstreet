@@ -2529,8 +2529,8 @@
       if (v.kind === "zerocoinspend") return `<div class="xp-io-item"><span class="v">zerocoin spend</span>${v.denomination ? " — denom " + esc(v.denomination) : ""}</div>`;
       if (v.kind === "anon"){
         const ring = (v.ring || []).map(m =>
-          `<div style="cursor:pointer;color:var(--text-faint)" data-gotx="${esc(m)}" title="a ring member — possibly the real source, probably a decoy">↳ ${esc(short(m, 10, 8))}</div>`).join("");
-        return `<div class="xp-io-item"><span class="hid">RingCT ring</span> — ${esc(String(v.inputs||"?"))} input(s), ring size ${esc(String(v.ringSize||"?"))}<br>real spender hidden among decoys${ring ? `<div style="margin-top:5px">${ring}</div>` : ""}</div>`;
+          `<div style="cursor:pointer;color:var(--text-faint)" data-gotx="${esc(m.txid)}" title="a ring member output — one of these is the real source">↳ ${esc(short(m.txid, 10, 8))}<span style="opacity:0.6"> : ${esc(String(m.n))}</span></div>`).join("");
+        return `<div class="xp-io-item"><span class="hid">RingCT ring</span> — ring of ${esc(String(v.ringSize||"?"))} outputs, ${esc(String(v.inputs||"?"))} real spend(s)<br>the real source hides among the decoys${ring ? `<div style="margin-top:5px">${ring}</div>` : ""}</div>`;
       }
       return `<div class="xp-io-item" data-gotx="${esc(v.txid||"")}" style="cursor:pointer" title="open the funding tx">
         ${esc(short(v.txid||"?", 10, 8))} <span style="color:var(--text-faint)">: ${esc(String(v.vout))}</span></div>`;

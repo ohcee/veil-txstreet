@@ -551,9 +551,12 @@ function shapeVin(vin){
   if (vin.coinbase != null) return { kind: "coinbase" };
   if (vin.type === "zerocoinspend") return { kind: "zerocoinspend", denomination: vin.denomination };
   if (vin.type === "anon"){
-    // the ring: every txid referenced as a possible source — one real, the rest decoys
-    const ring = [...new Set((vin.ringct_inputs || []).map(r => r.txid).filter(Boolean))].slice(0, 12);
-    return { kind: "anon", ringSize: vin.ring_size, inputs: vin.num_inputs, ring };
+    // the ring, in full: ring_size output references, each {txid, vout} — the real
+    // source is one of them and the rest are decoys. No dedup: members are OUTPUTS,
+    // and two members may legitimately share a txid.
+    const ring = (vin.ringct_inputs || []).map(r => ({ txid: r.txid, n: r["vout.n"] != null ? r["vout.n"] : r.n }));
+    return { kind: "anon", ringSize: vin.ring_size, inputs: vin.num_inputs,
+             keyImages: (vin.key_images || []).length, ring };
   }
   return { kind: "standard", txid: vin.txid, vout: vin.vout };
 }
