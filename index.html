@@ -522,7 +522,7 @@
     // the roof clears the marquee — with the door opening toward the corridor.
     geo.houseW = Math.max(46, rw * 0.16);
     geo.houseH = geo.houseW * 0.78;
-    geo.houseX = geo.tStemC + geo.tStemW * 0.5 + geo.houseW * 0.35;   // left enough to leave the stealth band clear
+    geo.houseX = geo.tStemC - geo.tStemW * 0.5 - geo.houseW * 0.55;   // tucked left of the stem, up against the bushes
     geo.houseY = geo.tBarY1 + geo.houseH * 0.6 + 8;
     // TWELVE RingCT portals — one per ring in the signature. They sit in the open band
     // right of the bushes, BELOW the boarding line: the merge sweep and the queue live
@@ -552,8 +552,9 @@
     // front path across to the stem
     if (Math.abs(x - geo.houseX) < geo.houseW * 0.85 &&
         y > geo.houseY - geo.houseH * 1.1 && y < geo.houseY + geo.houseH * 0.95) return true;
-    { const doorY = geo.houseY + geo.houseH * 0.5 + 8;
-      if (y > doorY - 8 && y < doorY + 16 && x > geo.tStemC && x < geo.houseX) return true; }
+    { const doorY = geo.houseY + geo.houseH * 0.5 + 8;   // front path, whichever side the house sits
+      if (y > doorY - 8 && y < doorY + 16 &&
+          x > Math.min(geo.tStemC, geo.houseX) && x < Math.max(geo.tStemC, geo.houseX)) return true; }
     return false;
   }
   let scroll = 0;                 // world scroll for belt texture + drifting moons
