@@ -184,6 +184,9 @@ function mockAlgo() { const w = { pos:0.50, progpow:0.32, randomx:0.10, sha256d:
 // classification queue (limits concurrent getrawtransaction calls)
 const txQ = [];
 let inflight = 0;
+// the CURRENT mempool with its classifications — so a page that just loaded can pull
+// the real pending set instead of trusting whatever its last snapshot remembered
+const memNow = new Map();                  // txid -> { txid, vsize, fee, type, time }
 function enqueueTx(txid, mp) { txQ.push({ txid, mp }); pumpTx(); }
 function pumpTx() {
   while (inflight < 4 && txQ.length) {
@@ -192,13 +195,16 @@ function pumpTx() {
     const fee = mp.fee != null ? mp.fee : (mp.fees && mp.fees.base) || 0;
     const time = mp.time || Date.now() / 1000;
     if (txQ.length > 30) { // backlog: skip detail lookup, use size heuristic
+      memNow.set(txid, { txid, vsize, fee, type: heuristicType(vsize), time });
       push({ kind: "tx", txid, vsize, fee, type: heuristicType(vsize), time });
       continue;
     }
     inflight++;
     rpc("getrawtransaction", [txid, true])
-      .then(tx => push({ kind: "tx", txid, vsize, fee, type: classify(tx), time }))
-      .catch(() => push({ kind: "tx", txid, vsize, fee, type: heuristicType(vsize), time }))
+      .then(tx => { const t = classify(tx); memNow.set(txid, { txid, vsize, fee, type: t, time });
+                    push({ kind: "tx", txid, vsize, fee, type: t, time }); })
+      .catch(() => { const t = heuristicType(vsize); memNow.set(txid, { txid, vsize, fee, type: t, time });
+                     push({ kind: "tx", txid, vsize, fee, type: t, time }); })
       .finally(() => { inflight--; pumpTx(); });
   }
 }
@@ -302,13 +308,16 @@ async function poll() {
     const cur = Object.keys(mp);
     const curSet = new Set(cur);
     for (const tid of [...known]) if (!curSet.has(tid)) known.delete(tid);
+    for (const tid of [...memNow.keys()]) if (!curSet.has(tid)) memNow.delete(tid);
     const fresh = cur.filter(t => !known.has(t));
     const CAP = 120;                      // classify (via RPC) up to CAP new tx per poll
     fresh.slice(0, CAP).forEach(tid => { known.add(tid); enqueueTx(tid, mp[tid]); });
     fresh.slice(CAP).forEach(tid => {     // overflow: still surface it (size heuristic, no RPC)
       known.add(tid);
       const mpx = mp[tid], vsize = mpx.vsize || mpx.size || 500;
-      push({ kind: "tx", txid: tid, vsize, fee: mpx.fee != null ? mpx.fee : (mpx.fees && mpx.fees.base) || 0, type: heuristicType(vsize), time: mpx.time || Date.now() / 1000 });
+      const ev = { txid: tid, vsize, fee: mpx.fee != null ? mpx.fee : (mpx.fees && mpx.fees.base) || 0, type: heuristicType(vsize), time: mpx.time || Date.now() / 1000 };
+      memNow.set(tid, ev);
+      push({ kind: "tx", ...ev });
     });
     warned = false; rpcMisses = 0;
   } catch (e) {
@@ -636,6 +645,11 @@ const server = http.createServer((req, res) => {
                          res.end(JSON.stringify(payload)); })
       .catch(e => { res.writeHead(404, { "Content-Type": "application/json" });
                     res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+  if (u.pathname === "/api/mempool") {
+    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+    res.end(JSON.stringify({ ok: true, txs: [...memNow.values()].slice(0, 200) }));
     return;
   }
   if (u.pathname === "/api/snitch") {

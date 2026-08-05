@@ -1042,6 +1042,7 @@
   const txListEl = document.getElementById("txList");
   const searchEl = document.getElementById("search");
   let recentTx = [], searchTerm = "";
+  const mempoolSet = new Set();            // txids the node currently holds as pending
   searchEl.addEventListener("input", () => { searchTerm = searchEl.value.trim().toLowerCase(); renderTxList(); });
   txListEl.addEventListener("click", (e) => {
     const grp = e.target.closest(".grp-block");
@@ -1084,12 +1085,12 @@
     const rows = recentTx.filter(tx => !q || tx.hash.includes(q) || (tx.addr && tx.addr.toLowerCase().includes(q)));
     const frag = document.createDocumentFragment();
     let shown = 0;
-    // "Pending" is bounded by what the node actually reports in its mempool; anything else
-    // untagged is older traffic we couldn't attribute to a recent block
+    // "Pending" is exactly what the node holds right now — matched by txid against the
+    // synced mempool, not guessed from a count. The rest of the untagged rows are older
+    // traffic we couldn't attribute to a recent block.
     const untagged = rows.filter(tx => tx.bh == null);
-    const nPending = Math.max(0, Math.min(untagged.length, stat.mempool || 0));
-    const pending = untagged.slice(0, nPending);
-    const earlier = untagged.slice(nPending);
+    const pending = untagged.filter(tx => mempoolSet.has(tx.hash));
+    const earlier = untagged.filter(tx => !mempoolSet.has(tx.hash));
     if (pending.length){
       frag.appendChild(groupHeader("grp-pending", "#22e0d6", "Pending", pending.length + " tx",
         "In the node's mempool, not yet in a block"));
@@ -2336,6 +2337,7 @@
     }
   }
   function onLiveTx(ev){
+    mempoolSet.add(ev.txid);
     const walking = people.reduce((a,p)=>a+(p.state==="walking"?1:0),0);
     const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid };
     if (walking < 100) addPerson(d);          // animate it walking the street
@@ -2346,15 +2348,32 @@
     if (ev.txids && ev.txids.length){
       const set = new Set(ev.txids);
       for (const tx of recentTx) if (tx.bh == null && set.has(tx.hash)) tx.bh = ev.height;
+      for (const tid of ev.txids) mempoolSet.delete(tid);   // confirmed = no longer pending
     }
     mineBlock({ height: ev.height, hash: ev.hash, txcount: ev.txcount, algo: ev.algo, txids: ev.txids });
+  }
+  // A refresh must not lose pending transactions: the event feed only flows forward,
+  // and the saved snapshot only knows what it saw. So on load, fetch the node's actual
+  // mempool and reconcile — spawn a walker and a feed row for anything we're missing.
+  async function syncMempool(){
+    let d; try { d = await (await fetch("/api/mempool", { cache: "no-store" })).json(); } catch (_) { return; }
+    if (!d || !d.ok) return;
+    for (const m of d.txs){
+      mempoolSet.add(m.txid);
+      const row = recentTx.find(t => t.hash === m.txid);
+      const walking = people.some(p => p.tx && p.tx.hash === m.txid);
+      if (row && !walking) addPerson({ reuseTx: row });                  // row survived, walker didn't
+      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid });
+    }
+    renderTxList();
   }
   async function pollFeed(){
     try {
       const r = await fetch("/api/state?since=" + feedSeq, { cache: "no-store" });
       if (!r.ok) throw new Error("http " + r.status);
       const j = await r.json();
-      if (feedFirst){ feedFirst = false; feedSeq = j.seq || 0; setMode(j.mode); applyStats(j.stats); return; }
+      if (feedFirst){ feedFirst = false; feedSeq = j.seq || 0; setMode(j.mode); applyStats(j.stats);
+                      if (j.mode === "live") syncMempool(); return; }
       setMode(j.mode); applyStats(j.stats);
       for (const ev of (j.events || [])){
         feedSeq = Math.max(feedSeq, ev.seq);
