@@ -981,10 +981,13 @@
     if (!f) return randomDropPoint();
     ringFlash = 1;
     // like the ring itself: the arrival is real, the door is unknowable. The spawn
-    // point is anywhere under the fog — never attributable to one portal — and the
-    // Veilian only becomes visible climbing out of the shroud.
-    return { x: f.x0 + 10 + Math.random() * (f.x1 - f.x0 - 20),
-             y: f.y0 + 18 + Math.random() * (f.y1 - f.y0 - 26), direct: true };
+    // must land strictly INSIDE the curtain's ellipse — the spawn box is a rectangle,
+    // and its corners poke out of the cloth, which put arrivals visibly in the bushes.
+    const cx2 = (f.x0 + f.x1) / 2, cy2 = (f.y0 + f.y1) / 2;
+    const rx2 = (f.x1 - f.x0) / 2 - 18, ry2 = (f.y1 - f.y0) / 2 - 18;
+    const a = Math.random() * 6.283, r = Math.sqrt(Math.random());
+    return { x: cx2 + Math.cos(a) * rx2 * r,
+             y: cy2 + Math.sin(a) * ry2 * r, direct: true };
   }
   function randomDropPoint(){
     const yTop = geo.marqueeY + 60, yBot = Math.min(geo.bBarY1, geo.mergeY0 - 30);   // clear of the banner overhead
@@ -1047,7 +1050,9 @@
       tx, type, size, speed, spawnX,
       x: spawnX,
       y: spawnY,
-      tp: (fresh && !viaHouse) ? 1 : 0,        // 1 = materialising; the house walker just opens a door
+      // 1 = materialising. The house walker just opens a door, and a veiled RingCT
+      // must not fire the sky-beam — it would point straight at the landing spot.
+      tp: (fresh && !viaHouse && !viaDrop) ? 1 : 0,
       // climb up to the corridor only when the arrival is BELOW the boarding merge.
       // RingCT converge on the field's centre as they rise, so every one of them
       // walks out from under the RINGCT PORTALS sign — one exit, no hint of the door
