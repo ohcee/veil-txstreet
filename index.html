@@ -763,20 +763,25 @@
     const w2 = (f.x1 - f.x0) / 2, h2 = (f.y1 - f.y0) / 2;
     ctx.save();
     ctx.beginPath(); ctx.ellipse(cx2, cy2, w2 + 8, h2 + 10, 0, 0, 6.28); ctx.clip();
-    // near-opaque at rest — a dark curtain, not a haze
-    const base = ctx.createRadialGradient(cx2, cy2, 4, cx2, cy2, Math.max(w2, h2) + 12);
-    base.addColorStop(0, "rgba(16,8,28,0.9)");
-    base.addColorStop(0.72, "rgba(13,6,24,0.84)");
+    // near-opaque at rest — a dark curtain, not a haze. Drawn in a scaled space so the
+    // falloff is ELLIPTICAL: a circular gradient over this tall field left the top and
+    // bottom portal rows poking out of the dark.
+    ctx.save();
+    ctx.translate(cx2, cy2); ctx.scale((w2 + 10) / 100, (h2 + 12) / 100);
+    const base = ctx.createRadialGradient(0, 0, 4, 0, 0, 100);
+    base.addColorStop(0, "rgba(16,8,28,0.92)");
+    base.addColorStop(0.8, "rgba(13,6,24,0.86)");
     base.addColorStop(1, "rgba(10,5,20,0)");
-    ctx.fillStyle = base; ctx.fillRect(f.x0 - 12, f.y0 - 14, (w2 + 12) * 2, (h2 + 14) * 2);
+    ctx.fillStyle = base; ctx.beginPath(); ctx.arc(0, 0, 100, 0, 6.28); ctx.fill();
     if (ringFlash > 0){
       // the arrival: the whole field lights up THROUGH the veil — a bloom under cloth
-      const glow = ctx.createRadialGradient(cx2, cy2, 2, cx2, cy2, Math.max(w2, h2) + 6);
+      const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 100);
       glow.addColorStop(0, hexA("#d64bff", 0.42 * ringFlash));
       glow.addColorStop(0.6, hexA("#9a2fd6", 0.22 * ringFlash));
       glow.addColorStop(1, hexA("#9a2fd6", 0));
-      ctx.fillStyle = glow; ctx.fillRect(f.x0 - 12, f.y0 - 14, (w2 + 12) * 2, (h2 + 14) * 2);
+      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 100, 0, 6.28); ctx.fill();
     }
+    ctx.restore();
     for (let i = 0; i < 4; i++){                                   // drifting folds in the cloth
       const px = cx2 + Math.sin(time * 0.35 + i * 1.9) * w2 * 0.55;
       const py = cy2 + Math.cos(time * 0.28 + i * 2.4) * h2 * 0.6;
@@ -1043,8 +1048,11 @@
       x: spawnX,
       y: spawnY,
       tp: (fresh && !viaHouse) ? 1 : 0,        // 1 = materialising; the house walker just opens a door
-      // climb up to the corridor only when the arrival is BELOW the boarding merge
-      climbing: (viaGate || viaDrop) && spawnY > geo.mergeY0, climbX: spawnX,
+      // climb up to the corridor only when the arrival is BELOW the boarding merge.
+      // RingCT converge on the field's centre as they rise, so every one of them
+      // walks out from under the RINGCT PORTALS sign — one exit, no hint of the door
+      climbing: (viaGate || viaDrop) && spawnY > geo.mergeY0,
+      climbX: (viaDrop && geo.ringField) ? (geo.ringField.x0 + geo.ringField.x1) / 2 : spawnX,
       direct: viaGate || !!(drop && drop.direct),   // portal arrivals walk straight down, not via the stem
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
       state: "walking", boards: true,      // every walker is a pending tx bound for the ship
