@@ -14,7 +14,7 @@ arrives** — the arrival is a picture of its traceability:
 |---|---|---|
 | **Basecoin** (grey) | human | walks out the front door of **The Transparent House** — origin in plain sight |
 | **Stealth** (cyan) | full alien | surfaces through a ground portal — you see the point, not the source |
-| **RingCT** (magenta) | hybrid, cloaked to a faint ghost | materialises on one of **twelve portals** (one per ring in the signature) or anywhere open — nothing to trace |
+| **RingCT** (magenta) | hybrid, cloaked to a faint ghost | arrives under **the veil** — a dark curtain hiding twelve portals (one per ring in the signature). The field only lights up *through* the cloth when a transaction lands, every portal flashing at once, and the Veilian walks out from under the sign — no telling which door |
 
 The block's **coinbase** is an astronaut who climbs out of the mine carrying a gold
 coin (on a superblock he gets an armed escort — that's the monthly budget payout), and
