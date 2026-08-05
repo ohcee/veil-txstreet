@@ -532,7 +532,9 @@
       const xs = [bandL + (bandR - bandL) * 0.28, bandL + (bandR - bandL) * 0.72];
       const yT = geo.boardY + 34, yB = H * 0.86;
       for (let row = 0; row < 6; row++) for (const x of xs)
-        geo.ringSpots.push({ x, y: yT + (yB - yT) * row / 5 }); }
+        geo.ringSpots.push({ x, y: yT + (yB - yT) * row / 5 });
+      // the fogged field the portals sit in — arrivals happen somewhere under here
+      geo.ringField = { x0: bandL - 6, x1: bandR + 6, y0: yT - 16, y1: yB + 14 }; }
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -720,7 +722,16 @@
     { const xs = geo.ringSpots.map(q=>q.x), ys = geo.ringSpots.map(q=>q.y);
       originSign((Math.min(...xs)+Math.max(...xs))/2, Math.min(...ys) - 22, "RINGCT PORTALS", mag); }
     for (let i = 0; i < geo.ringSpots.length; i++){
-      const p = geo.ringSpots[i], pulse = 0.5 + 0.5*Math.sin(time*2 + i*0.55);
+      const p = geo.ringSpots[i], pulse = Math.min(1, 0.5 + 0.5*Math.sin(time*2 + i*0.55) + ringFlash);
+      if (ringFlash > 0){
+        // an arrival: every portal fires its beam at once — decoys and the real one,
+        // indistinguishable by design
+        const bg = ctx.createLinearGradient(p.x, p.y - 34, p.x, p.y);
+        bg.addColorStop(0, hexA(mag, 0)); bg.addColorStop(1, hexA(mag, 0.35 * ringFlash));
+        ctx.fillStyle = bg;
+        ctx.beginPath(); ctx.moveTo(p.x - 3, p.y - 34); ctx.lineTo(p.x + 3, p.y - 34);
+        ctx.lineTo(p.x + 7, p.y); ctx.lineTo(p.x - 7, p.y); ctx.closePath(); ctx.fill();
+      }
       const gg = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 15);
       gg.addColorStop(0, hexA(mag, 0.16 + pulse*0.12)); gg.addColorStop(1, hexA(mag, 0));
       ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(p.x, p.y, 15, 6, 0, 0, 6.28); ctx.fill();
@@ -743,6 +754,29 @@
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText(text, x, y - 0.5);
     ctx.shadowBlur = 0; ctx.textBaseline = "alphabetic";
+  }
+  // the veil over the RingCT field: thick enough to hide who lands where, thin
+  // enough that the portal glow bleeds through
+  function drawRingFog(time){
+    if (!geo.ringField) return;
+    const f = geo.ringField, cx2 = (f.x0 + f.x1) / 2, cy2 = (f.y0 + f.y1) / 2;
+    const w2 = (f.x1 - f.x0) / 2, h2 = (f.y1 - f.y0) / 2;
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(cx2, cy2, w2 + 8, h2 + 10, 0, 0, 6.28); ctx.clip();
+    const base = ctx.createRadialGradient(cx2, cy2, 4, cx2, cy2, Math.max(w2, h2) + 12);
+    base.addColorStop(0, `rgba(30,14,48,${0.62 + ringFlash * 0.1})`);
+    base.addColorStop(0.75, "rgba(24,11,40,0.55)");
+    base.addColorStop(1, "rgba(18,8,32,0)");
+    ctx.fillStyle = base; ctx.fillRect(f.x0 - 12, f.y0 - 14, (w2 + 12) * 2, (h2 + 14) * 2);
+    for (let i = 0; i < 4; i++){                                   // drifting mist banks
+      const px = cx2 + Math.sin(time * 0.35 + i * 1.9) * w2 * 0.55;
+      const py = cy2 + Math.cos(time * 0.28 + i * 2.4) * h2 * 0.6;
+      const pg = ctx.createRadialGradient(px, py, 1, px, py, 34);
+      pg.addColorStop(0, hexA("#b58aff", 0.10 + ringFlash * 0.05));
+      pg.addColorStop(1, hexA("#b58aff", 0));
+      ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(px, py, 34, 20, 0, 0, 6.28); ctx.fill();
+    }
+    ctx.restore();
   }
   function drawGate(time){
     const gx = geo.gateX, gy = geo.gateY, w = 46, h = 16;
@@ -927,11 +961,16 @@
   // since amounts are hidden on a privacy chain (RingCT/stealth).
   function sizeFromVsize(v){ return Math.max(0.72, Math.min(2.05, 0.5 + Math.log10(Math.max(120, v) / 120) * 0.62)); }
   // RingCT arrives through one of the twelve portals
+  let ringFlash = 0;                       // all twelve portals pulse when a RingCT lands
   function ringSpot(){
-    const s = geo.ringSpots;
-    if (!s || !s.length) return randomDropPoint();
-    const p = s[(Math.random()*s.length)|0];
-    return { x: p.x + (Math.random()-0.5)*7, y: p.y - 1, direct: true };
+    const f = geo.ringField;
+    if (!f) return randomDropPoint();
+    ringFlash = 1;
+    // like the ring itself: the arrival is real, the door is unknowable. The spawn
+    // point is anywhere under the fog — never attributable to one portal — and the
+    // Veilian only becomes visible climbing out of the shroud.
+    return { x: f.x0 + 10 + Math.random() * (f.x1 - f.x0 - 20),
+             y: f.y0 + 18 + Math.random() * (f.y1 - f.y0 - 26), direct: true };
   }
   function randomDropPoint(){
     const yTop = geo.marqueeY + 60, yBot = Math.min(geo.bBarY1, geo.mergeY0 - 30);   // clear of the banner overhead
@@ -1395,6 +1434,7 @@
     updateAmbient(dt);
     if (flash > 0) flash = Math.max(0, flash - dt * 1.6);
     if (foundTimer > 0) foundTimer = Math.max(0, foundTimer - dt);
+    if (ringFlash > 0) ringFlash = Math.max(0, ringFlash - dt / 1.4);
   }
   function ease(t){ return t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2; }
 
@@ -1477,6 +1517,7 @@
     // people (draw far/higher first)
     const order = people.slice().sort((a,c)=>a.y-c.y);
     for (const p of order) drawPerson(p, time);
+    if (!NARROW) drawRingFog(time);      // the shroud over the portal field — over the people, on purpose
 
     if (!NARROW) drawGantry(time);      // phones keep only the ship, walkers and lane
     drawStoplight(time);
