@@ -167,3 +167,6 @@ All optional. Env var overrides `config.json` overrides the built-in default.
   off, sits out a few seconds by the stairs, and boards the next ship. The reverse
   holds too a walker whose tx made the block beams aboard as it lifts off, never
   left behind to ride a ship its transaction isn't in.
+- The scene keeps simulating in a background tab, so tabbing away and back never
+  leaves stacked ships or a lost astronaut. Blocks that land while you're gone play
+  out the same as ones you watched.
