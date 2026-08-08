@@ -1,10 +1,10 @@
 # VeilStreet
 
-A live, TxStreet-style visualizer for **Veil (VEIL)** — set in space, because Veil's
+A live, TxStreet-style visualizer for **Veil (VEIL)** set in space, because Veil's
 community used to call themselves **Veilians**. Every mempool transaction is a Veilian
 walking to the mothership (the forming block), boarding as they arrive. When the
 network finds a block, the BLOCK FOUND sign flickers on and the ship lifts off with
-everyone the block accepted — anyone it turned away steps off, sits out a few seconds
+everyone the block accepted anyone it turned away steps off, sits out a few seconds
 by the stairs, and catches the next ship.
 
 How private a transaction is decides what its Veilian looks like **and how it
@@ -12,23 +12,23 @@ arrives** — the arrival is a picture of its traceability:
 
 | Type | Being | Arrival |
 |---|---|---|
-| **Basecoin** (grey) | human | walks out the front door of **The Transparent House** — origin in plain sight |
-| **Stealth** (cyan) | full alien | surfaces through a ground portal — you see the point, not the source |
-| **RingCT** (magenta) | hybrid, cloaked to a faint ghost | arrives under **the veil** — a dark curtain hiding twelve portals (one per ring in the signature). The field only lights up *through* the cloth when a transaction lands, every portal flashing at once, and the Veilian walks out from under the sign — no telling which door |
+| **Basecoin** (grey) | human | walks out the front door of **The Transparent House** origin in plain sight |
+| **Stealth** (cyan) | full alien | surfaces through a ground portal you see the point, not the source |
+| **RingCT** (magenta) | hybrid, cloaked to a faint ghost | arrives under **the veil** a dark curtain hiding twelve portals (one per ring in the signature). The field only lights up *through* the cloth when a transaction lands, every portal flashing at once, and the Veilian walks out from under the sign no telling which door |
 
 The block's **coinbase** is an astronaut who climbs out of the mine carrying a gold
-coin (on a superblock he gets an armed escort — that's the monthly budget payout), and
+coin (on a superblock he gets an armed escort that's the monthly budget payout), and
 the coin rides in the ship's cockpit. Figure size tracks transaction **vSize** (amounts
 are hidden on a privacy chain, like TxStreet's Monero street); walking speed tracks fee
 priority.
 
 Reading the ship: the dome is a glass viewport into the cabin, and the **portholes are
-a load gauge** — one light per ten transactions waiting or aboard, all yellow at 90,
+a load gauge** one light per ten transactions waiting or aboard, all yellow at 90,
 all red past 100. Anyone waiting by the stairs stands still while the chain is healthy
 and starts fidgeting when the block runs late; the marquee clock heats up with it.
 
 Built with a zero-dependency Node backend (`server.js`) and a single self-contained
-`index.html` (pure Canvas 2D — no build step, no npm install).
+`index.html` (pure Canvas 2D no build step, no npm install).
 
 - Studied from the MIT-licensed [TxStreet](https://github.com/txstreet/txstreet) /
   [processor](https://github.com/txstreet/processor); all art and code here are original.
@@ -96,8 +96,8 @@ rpcallowip=127.0.0.1
 Copy `config.example.json` → `config.json` with your credentials, or pass them as env
 vars.
 
-Clicking any block or transaction — in the feed, the recent-blocks strip, or the scene
-itself — opens **its own data page in-app**, served off your node: block pages with
+Clicking any block or transaction in the feed, the recent-blocks strip, or the scene
+itself opens **its own data page in-app**, served off your node: block pages with
 header fields, per-algo detail and the tx list; transaction pages with type, ring size,
 commitments, and the RingCT fee (which Veil keeps in the clear even when amounts are
 hidden). Pages are deep-linkable (`#/block/<height>`, `#/tx/<txid>`), with the
@@ -106,12 +106,12 @@ hidden). Pages are deep-linkable (`#/block/<height>`, `#/tx/<txid>`), with the
 ### The Snitch List
 
 Instead of a rich list, a **snitch list**: the largest **transparent** (basecoin)
-addresses — the ones anyone can read. The node keeps no address index, so the server
+addresses the ones anyone can read. The node keeps no address index, so the server
 harvests addresses from blocks as they stream past (plus a one-time ~20k-block
 backfill) and prices the whole set against the UTXO set with `scantxoutset` every 90s.
 Balances are exact; coverage is the addresses it has *seen*, and the panel says so.
 
-Stealth and RingCT outputs carry no address at all, so they can never appear — which
+Stealth and RingCT outputs carry no address at all, so they can never appear which
 is the point. Addresses paid on superblock heights are tagged **budget** (that's
 Veil's treasury, not somebody's stash); name pools and services in
 `snitch-labels.json`. The harvest persists per chain (`snitch-addrs.json` for mainnet,
@@ -120,7 +120,7 @@ Veil's treasury, not somebody's stash); name pools and services in
 ### Superblocks
 
 Veil pays its budget on a superblock every **43,200 blocks** (~monthly). There's no
-RPC for it — the server derives it from the interval, same as the explorers. The
+RPC for it the server derives it from the interval, same as the explorers. The
 marquee counts down to the next one, and on the superblock itself the coinbase
 astronaut walks out of the mine under armed escort with the payout in a hover-crate.
 Preview it any time with `?superblock=1`.
@@ -165,5 +165,5 @@ All optional. Env var overrides `config.json` overrides the built-in default.
 - USD figures come from the mainnet market price, so on testnet they're decorative.
 - Rejection is honest: a transaction that boards but isn't in the found block steps
   off, sits out a few seconds by the stairs, and boards the next ship. The reverse
-  holds too — a walker whose tx made the block beams aboard as it lifts off, never
+  holds too a walker whose tx made the block beams aboard as it lifts off, never
   left behind to ride a ship its transaction isn't in.
