@@ -852,7 +852,14 @@
   let light = "red", lightTimer = 0;
 
   function mineBlock(block) {
-    const lead = buses.find(b => b.state === "waiting") || buses[0];
+    let lead = buses.find(b => b.state === "waiting");
+    if (!lead){
+      // between ships (or the tab was hidden and nothing animated): promote the one
+      // that's flying in rather than reusing a hull that already left
+      lead = buses.find(b => b.state === "arriving");
+      if (lead){ lead.state = "waiting"; lead.y = geo.busY; }
+      else lead = buses[buses.length - 1];
+    }
     const algo = (block && block.algo) ? block.algo : (LIVE ? "unknown" : pickAlgo());   // real when live, weighted when sim
     if (!LIVE) {                                   // sim advances its own chain
       stat.height += 1;
@@ -2685,6 +2692,10 @@
   for (let i=0;i<16;i++) spawnPerson(Math.random()*H*0.7);   // seed the street until the feed answers
   setInterval(renderStats, 600);
   setInterval(saveState, 2000);
+  // rAF stops in a hidden tab but the feed poll doesn't: blocks kept landing against a
+  // frozen scene — departed ships stacked up and the coinbase astronaut got orphaned.
+  // Tick the simulation coarsely while hidden so the scene stays consistent.
+  setInterval(() => { if (document.hidden) update(1.0); }, 1000);
   window.addEventListener("beforeunload", saveState);
   pollFeed(); setInterval(pollFeed, 1200);
   routeXp();                                 // deep link straight into a block/tx page
