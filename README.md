@@ -165,6 +165,9 @@ All optional. Env var overrides `config.json` overrides the built-in default.
 | `VEIL_USD` | `veilUsd` | *auto* | pin the VEIL→USD price; unset = live NonKYC price |
 | `VEIL_MARKET` | `veilMarket` | `VEIL_USDT` | NonKYC market for the auto price |
 | `VEIL_NO_USD` | `noUsd` | `false` | drop all USD figures (the live testnet mirror sets this) |
+| `SNITCH_BACKFILL` | `snitchBackfill` | `20000` | blocks to walk back harvesting snitch addresses; wider catches older dormant holders |
+| `SNITCH_BATCH` | `snitchBatch` | `600` | addresses per `scantxoutset` pass; scan cost barely depends on this, so bigger = fewer scans |
+| `SNITCH_EVERY_MS` | `snitchEveryMs` | `90000` | how often the harvested set is re-priced |
 | — | `snitchLabels` | — | extra `{ "<address>": "name" }` labels for the Snitch List |
 
 ---

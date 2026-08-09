@@ -32,8 +32,10 @@ const path = require("path");
 let fileCfg = {};
 try { fileCfg = JSON.parse(fs.readFileSync(path.join(__dirname, "config.json"), "utf8")); } catch (_) {}
 const CFG = {
-  snitchBackfill: 20000,     // blocks to walk back once, seeding the snitch list
-  snitchEveryMs: 90000,      // how often to re-price the harvested addresses
+  // how far back to walk once, seeding the list. Wider finds older (dormant) holders
+  // but grows the set that gets re-priced, so raise SNITCH_BATCH / SNITCH_EVERY_MS with it.
+  snitchBackfill: +(process.env.SNITCH_BACKFILL || fileCfg.snitchBackfill || 20000),
+  snitchEveryMs: +(process.env.SNITCH_EVERY_MS || fileCfg.snitchEveryMs || 90000),   // re-price cadence
   port: +(process.env.PORT || fileCfg.port || 8790),
   host: process.env.BIND || fileCfg.host || "0.0.0.0",   // set BIND=127.0.0.1 behind a proxy
   feed: (process.env.FEED || fileCfg.feed || "rpc").toLowerCase(),
@@ -143,7 +145,7 @@ async function detectPort() {
 }
 
 let rpcId = 0;
-function rpc(method, params = []) {
+function rpc(method, params = [], timeoutMs = 8000) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ jsonrpc: "1.0", id: ++rpcId, method, params });
     const auth = rpcAuth();
@@ -154,7 +156,7 @@ function rpc(method, params = []) {
         "Content-Length": Buffer.byteLength(body),
         ...(auth ? { "Authorization": "Basic " + Buffer.from(auth).toString("base64") } : {}),
       },
-      timeout: 8000,
+      timeout: timeoutMs,
     }, res => {
       let data = "";
       res.on("data", c => (data += c));
@@ -434,7 +436,21 @@ function initSnitch(){
 let labelFile = {};
 try { labelFile = (JSON.parse(fs.readFileSync(path.join(__dirname, "snitch-labels.json"), "utf8")) || {}).labels || {}; } catch (_) {}
 const SNITCH_LABELS = Object.assign({}, labelFile, fileCfg.snitchLabels || {});
-const SNITCH_BATCH = 600;                  // descriptors per scantxoutset pass
+// descriptors per scantxoutset pass. Scan time is dominated by walking the UTXO set,
+// not the descriptor count (measured: 600 and 10k cost the same ~3s), so bigger
+// batches mean fewer scans for the same coverage.
+const SNITCH_BATCH = +(process.env.SNITCH_BATCH || fileCfg.snitchBatch || 600);
+
+// The node runs at most ONE scantxoutset at a time ("Scan already in progress"), so
+// every scan in the process — the snitch ranker's batches and the address pages —
+// must share one queue or they knock each other over.
+let addrScanChain = Promise.resolve();
+function scanUtxos(descs){
+  // a full UTXO walk takes seconds; give it far more than the default rpc timeout
+  const run = addrScanChain.then(() => rpc("scantxoutset", ["start", descs], 60000));
+  addrScanChain = run.catch(() => {});       // keep the chain alive even if one fails
+  return run;
+}
 let snitchSeen = new Map();                // address -> scriptPubKey hex
 let snitchList = [];                       // ranked [{ addr, amount, outs }]
 let snitchAt = 0;                          // when the ranking was last refreshed
@@ -477,7 +493,7 @@ async function rankSnitch(){
     for (let i = 0; i < addrs.length; i += SNITCH_BATCH){
       const batch = addrs.slice(i, i + SNITCH_BATCH);
       let r;
-      try { r = await rpc("scantxoutset", ["start", batch.map(a => `addr(${a})`)]); }
+      try { r = await scanUtxos(batch.map(a => `addr(${a})`)); }
       catch (_) { continue; }                      // a bad descriptor kills the batch, not the pass
       if (!r || !r.success) continue;
       for (const u of (r.unspents || [])){
@@ -666,16 +682,13 @@ async function apiTx(id, blockHint){
 // can't stampede the node.
 // ---------------------------------------------------------------------------
 const addrCache = new Map();                 // address -> { at, payload }
-let addrScanChain = Promise.resolve();       // serialize the expensive scans
 async function apiAddress(addr){
   if (!addr || addr.length < 20 || addr.length > 120) throw new Error("not an address");
   const cached = addrCache.get(addr);
   if (cached && Date.now() - cached.at < 60000) return cached.payload;
   const vi = await rpc("validateaddress", [addr]).catch(() => null);
   if (!vi || !vi.isvalid) throw new Error("not a valid Veil address");
-  const run = addrScanChain.then(() => rpc("scantxoutset", ["start", [`addr(${addr})`]]));
-  addrScanChain = run.catch(() => {});       // keep the chain alive even if one fails
-  const r = await run;
+  const r = await scanUtxos([`addr(${addr})`]);   // shares the one-scan-at-a-time queue
   const utxos = (r && r.unspents) || [];
   let total = 0, sb = 0;
   const list = utxos.map(u => { total += u.amount || 0;
