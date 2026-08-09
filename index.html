@@ -529,8 +529,8 @@
     // the coinbase mine, dug into the lower bushes, with a shaft up to the bottom bar
     geo.mineX = geo.roadX0 + rw * 0.22;
     geo.mineY = geo.bBarY1 + H * 0.17;
-    // the staking vault sits deeper in the lower bushes: PoS's answer to the mine,
-    // where the hodlers sit on their coins
+    // the staking cult gathers deeper in the lower bushes: PoS's answer to the mine,
+    // where the faithful hold their coins
     geo.vaultX = geo.mineX + 8;
     geo.vaultY = geo.mineY + H * 0.155;
     // the stealth portal — in the open band right of the bushes, up near the Veilian
@@ -573,7 +573,7 @@
     if (y > geo.bBarY0 - pad && y < geo.bBarY1 + pad) return true;                      // mirrored bottom bar
     if (y >= geo.tBarY1 && y <= geo.bBarY0 && Math.abs(x - geo.tStemC) < geo.tStemW/2 + pad) return true;  // stem joining them
     if (y >= geo.bBarY1 - pad && y <= geo.mineY + 36 && Math.abs(x - geo.mineX) < 46) return true;         // shaft up from the mine
-    if (Math.abs(x - geo.vaultX) < 58 && y > geo.vaultY - 42 && y < geo.vaultY + 36) return true;          // the staking vault's clearing
+    if (Math.abs(x - geo.vaultX) < 58 && y > geo.vaultY - 42 && y < geo.vaultY + 36) return true;          // the staking cult's clearing
     // the transparent house sits in its own clearing between the bushes, with a short
     // front path across to the stem
     if (Math.abs(x - geo.houseX) < geo.houseW * 0.85 &&
@@ -655,7 +655,7 @@
     }
   }
   // the coinbase mine dug into the lower bushes — where the block's miner climbs out
-  // the staking vault's regulars: three hodlers who sit on their stacks and never
+  // the staking cult's members: three hodlers who stand over their stacks and never
   // walk anywhere — staking IS holding. Every PoS block one of them quietly wins:
   // they dissolve aboard in green stardust and come back restaked a while later.
   const hodlers = [
@@ -665,9 +665,10 @@
   ];
   function drawVault(time){
     const vx = geo.vaultX, vy = geo.vaultY, green = "#3dff9a", glow = "#a8ffd0";
-    originSign(vx, vy - 48, "STAKING VAULT", green);
-    // the vault is not a box, it is a place: a ring pad with the locked stake
-    // hovering over it as a crystal, humming while the hodlers stand their watch
+    originSign(vx, vy - 48, "STAKING CULT", green);
+    // not a building, a congregation: a ring pad with the locked stake hovering
+    // over it as a crystal, and the faithful gathered round it. Every PoS block
+    // is one of them ascending. They always come back. The coins never leave.
     const pulse = 0.5 + 0.5 * Math.sin(time * 1.6);
     const pg = ctx.createRadialGradient(vx, vy + 12, 2, vx, vy + 12, 36);
     pg.addColorStop(0, hexA(green, 0.15 + pulse * 0.07)); pg.addColorStop(1, hexA(green, 0));
