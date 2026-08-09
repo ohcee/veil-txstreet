@@ -166,8 +166,10 @@
     right: calc(var(--gutter) + 8px + var(--tx-panel-w) + 9px);
     background: rgba(6,4,13,0.5); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
     border: 1px solid var(--border); border-radius: 12px; padding: 11px 8px 12px;
-    display: flex; flex-direction: column; overflow: hidden;
+    display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden;
   }
+  .algo-panel::-webkit-scrollbar { width: 5px; }
+  .algo-panel::-webkit-scrollbar-thumb { background: rgba(123,47,214,0.4); border-radius: 3px; }
   .algo-panel .sp-title { margin-bottom: 8px; text-align: center;
     font-size: clamp(8px, 0.62vw, 11px); letter-spacing: 1.2px; white-space: nowrap; }
   .algo-foot { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
@@ -184,6 +186,13 @@
   .algo-d { font-size: clamp(8.5px, 0.68vw, 12px); color: var(--text-faint); margin: 2px 0 0 15px;
     font-variant-numeric: tabular-nums; white-space: nowrap; }
   .algo-foot .sp-row { font-size: clamp(9px, 0.7vw, 12px); }
+  .algo-net { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .algo-net .sp-title { margin: 0 0 6px; }
+  .algo-net .sp-row { font-size: clamp(9px, 0.7vw, 12px); margin: 4px 0; }
+  .net-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .ap-spark { margin: 8px 0 2px; }
+  .ap-spark span { font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-faint); }
+  .ap-spark svg { display: block; width: 100%; height: 20px; margin-top: 2px; }
 
   .foot {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
@@ -354,6 +363,13 @@
         <div class="sp-row">Avg block <b id="ap-avg">—</b></div>
         <div class="sp-row">Window <b id="ap-win">—</b></div>
       </div>
+      <div class="algo-net">
+        <div class="sp-title">Network</div>
+        <div class="sp-row">Peers <b id="ap-peers">—</b></div>
+        <div class="sp-row">Seeder <b id="ap-seed">—</b></div>
+        <div class="ap-spark"><span>block time</span><svg id="sparkBlk" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
+        <div class="ap-spark"><span>mempool depth</span><svg id="sparkMem" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
+      </div>
     </div>
 
     <div class="stats-pop" id="statsPop">
@@ -388,7 +404,7 @@
     <aside>
     <div class="side-head">
       <div class="side-title"><span class="live-dot"></span> Live Transactions</div>
-      <input class="search" id="search" placeholder="Search tx hash / stealth address…" />
+      <input class="search" id="search" placeholder="Search height / block / tx / address…" />
       <div class="ratio-bar" id="ratioBar">
         <div class="ratio-seg" style="background:#8a93b0; flex:2" title="Basecoin">BASE</div>
         <div class="ratio-seg" style="background:#22e0d6; flex:3" title="Stealth">STEALTH</div>
@@ -1113,6 +1129,19 @@
   let recentTx = [], searchTerm = "";
   const mempoolSet = new Set();            // txids the node currently holds as pending
   searchEl.addEventListener("input", () => { searchTerm = searchEl.value.trim().toLowerCase(); renderTxList(); });
+  searchEl.addEventListener("keydown", async (e) => {
+    if (e.key !== "Enter") return;
+    const q = searchEl.value.trim(); if (!q) return;
+    searchEl.classList.add("searching");
+    try {
+      const r = await (await fetch("/api/search?q=" + encodeURIComponent(q), { cache: "no-store" })).json();
+      if (r.kind === "block") xpOpenBlock(r.id);
+      else if (r.kind === "tx") xpOpenTx(r.id, null);
+      else if (r.kind === "address") xpOpenAddr(r.id);
+      else { searchEl.classList.add("noresult"); setTimeout(() => searchEl.classList.remove("noresult"), 900); }
+    } catch (_) {}
+    searchEl.classList.remove("searching");
+  });
   txListEl.addEventListener("click", (e) => {
     const grp = e.target.closest(".grp-block");
     if (grp){ const bh = grp.getAttribute("data-h"); if (bh) xpOpenBlock(+bh); return; }
@@ -1247,6 +1276,26 @@
     el.spRingct.textContent = c.ringct.toLocaleString();
     el.spPriv.textContent = (privacyRatio()*100).toFixed(1) + "%";
     renderAlgoEye();
+    renderNet();
+  }
+  // a tiny sparkline: values -> a polyline filling the 0..100 x 0..20 viewBox
+  function sparkInto(id, vals, col){
+    const svg = document.getElementById(id); if (!svg) return;
+    if (!vals || vals.length < 2){ svg.innerHTML = ""; return; }
+    const max = Math.max(1, ...vals), n = vals.length;
+    const pts = vals.map((v, i) => `${(i/(n-1)*100).toFixed(1)},${(19 - (v/max)*18).toFixed(1)}`).join(" ");
+    const last = vals[n-1], lx = 100, ly = 19 - (last/max)*18;
+    svg.innerHTML = `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.4"
+        vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 2px ${col})"/>
+      <circle cx="${lx}" cy="${ly.toFixed(1)}" r="1.6" fill="${col}"/>`;
+  }
+  function renderNet(){
+    const n = stat.net, sd = stat.seed;
+    const pe = document.getElementById("ap-peers"), se = document.getElementById("ap-seed");
+    if (pe) pe.innerHTML = n ? `${n.peers} <span style="color:var(--text-faint);font-weight:400">(${n.outbound}↑ ${n.inbound}↓)</span>` : "—";
+    if (se) se.innerHTML = sd ? `<span class="net-dot" style="background:${sd.up ? "#3dff9a" : "#ff4d5d"};box-shadow:0 0 5px ${sd.up ? "#3dff9a" : "#ff4d5d"}"></span>${sd.up ? sd.count + " ips" : "down"}` : "—";
+    sparkInto("sparkBlk", stat.blockGaps, "#4da3ff");
+    sparkInto("sparkMem", stat.memHist, "#22e0d6");
   }
   // The algorithm mix as a glowing alien eye: a squashed donut whose arcs are the share
   // of blocks each algo won, with its difficulty listed beside it.
@@ -2406,6 +2455,10 @@
     if (typeof s.avgBlock === "number") stat.avgBlock = s.avgBlock;
     if (s.algoMix) stat.algoMix = s.algoMix;
     if (s.diffs) stat.diffs = s.diffs;
+    if (s.net) stat.net = s.net;
+    if (s.seed !== undefined) stat.seed = s.seed;
+    if (s.blockGaps) stat.blockGaps = s.blockGaps;
+    if (s.memHist) stat.memHist = s.memHist;
     if (typeof s.usd === "number"){ const had = stat.usd>0; stat.usd = s.usd; if (!had && stat.usd>0) renderTxList(); }   // re-price fees once known
     if (el.chainNet) el.chainNet.textContent = (s.network==="mock" ? "mock feed" : (s.network||"mainnet")) + " · privacy L1";
     if (feedMode === "live"){
@@ -2511,7 +2564,7 @@
     const rows = document.getElementById("snitchRows");
     if (rows) rows.addEventListener("click", (e) => {
       const a = e.target.closest(".snitch-addr");
-      if (a) window.open(explorerAddr(a.dataset.addr), "_blank", "noopener");
+      if (a) xpOpenAddr(a.dataset.addr);
     });
     pollSnitch(); setInterval(pollSnitch, 30000);
   }
@@ -2525,6 +2578,7 @@
   const esc = (t) => String(t).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   function xpOpenBlock(id){ location.hash = "/block/" + id; }
   function xpOpenTx(id, hint){ location.hash = "/tx/" + id + (hint != null ? "@" + hint : ""); }
+  function xpOpenAddr(a){ location.hash = "/address/" + a; }
   function xpClose(){
     xpEl.classList.remove("open");
     if (location.hash) history.pushState(null, "", location.pathname + location.search);
@@ -2544,6 +2598,8 @@
     if (bl){ xpOpenBlock(bl.getAttribute("data-goblock")); return; }
     const tr = e.target.closest("[data-gotx]");
     if (tr){ xpOpenTx(tr.getAttribute("data-gotx"), tr.getAttribute("data-hint")); return; }
+    const ad = e.target.closest("[data-goaddr]");
+    if (ad){ xpOpenAddr(ad.getAttribute("data-goaddr")); return; }
   });
   function xpShow(html){ xpCard.innerHTML = html; xpEl.classList.add("open"); xpEl.scrollTop = 0; }
   function xpFail(kind, msg){
@@ -2645,7 +2701,8 @@
       if (v.kind === "zerocoinmint") return `<div class="xp-io-item">zerocoin mint — <span class="v">${esc(String(v.value||0))} VEIL</span></div>`;
       if (v.kind === "nonstandard" && !(v.value > 0)) return `<div class="xp-io-item" style="opacity:0.55">stake marker</div>`;
       const lbl = v.label ? ` <i class="xp-chip" style="background:${hexA("#ffcf5a",0.16)};color:#ffcf5a">${esc(v.label)}</i>` : "";
-      return `<div class="xp-io-item">${v.address ? esc(short(v.address, 10, 6)) : esc(v.kind)}${lbl}<br><span class="v">${esc(String(v.value != null ? v.value : "—"))} VEIL</span>${v.value > 0 && stat.usd > 0 ? ` <span style="color:var(--text-faint)">${fmtUsd(v.value * stat.usd)}</span>` : ""}</div>`;
+      const addr = v.address ? `<span data-goaddr="${esc(v.address)}" style="cursor:pointer;color:var(--veil-cyan)">${esc(short(v.address, 10, 6))}</span>` : esc(v.kind);
+      return `<div class="xp-io-item">${addr}${lbl}<br><span class="v">${esc(String(v.value != null ? v.value : "—"))} VEIL</span>${v.value > 0 && stat.usd > 0 ? ` <span style="color:var(--text-faint)">${fmtUsd(v.value * stat.usd)}</span>` : ""}</div>`;
     }).join("") || `<div class="xp-io-item">—</div>`;
     const usd = stat.usd > 0 && d.valueOut > 0 ? ` <span style="color:var(--text-faint)">(${fmtUsd(d.valueOut * stat.usd)})</span>` : "";
     xpShow(`
@@ -2676,10 +2733,39 @@
       </div>`);
   }
 
+  async function xpRenderAddress(id){
+    xpShow(`<div class="xp-load">scanning the UTXO set for ${esc(short(id, 10, 8))}…</div>`);
+    let d; try { d = await (await fetch("/api/address?id=" + encodeURIComponent(id), { cache: "no-store" })).json(); }
+    catch (_) { d = null; }
+    if (!d || !d.ok) return xpFail("address", (d && d.error) || "the node didn't answer");
+    const usd = d.usd > 0 && d.balance > 0 ? ` · ${fmtUsd(d.balance * d.usd)}` : "";
+    const lbl = d.label ? ` <i class="xp-chip" style="background:${hexA("#ffcf5a",0.16)};color:#ffcf5a">${esc(d.label)}</i>` : "";
+    const utxos = d.top.map(u => `<div class="xp-io-item">block <span class="v" data-goblock="${u.height}" style="cursor:pointer;color:var(--veil-cyan)">#${(u.height||0).toLocaleString()}</span>
+        <span class="v" style="float:right">${esc(String(u.amount))} VEIL</span></div>`).join("") || `<div class="xp-io-item">no unspent outputs</div>`;
+    xpShow(`
+      <div class="xp-head">
+        <div><div class="xp-kicker">transparent address</div>
+        <div class="xp-title" style="font-size:14px">${esc(short(id, 14, 10))}</div></div>${lbl}
+        <button class="xp-close" onclick="location.hash=''">✕</button>
+      </div>
+      <div class="xp-body">
+        <div class="xp-hash" data-copy="${esc(id)}" title="copy address">${esc(id)}</div>
+        <div class="xp-grid">
+          <div class="xp-cell"><b>balance</b><span>${d.balance.toLocaleString(undefined,{maximumFractionDigits:8})} VEIL${usd}</span></div>
+          <div class="xp-cell"><b>unspent outputs</b><span>${d.utxos.toLocaleString()}</span></div>
+        </div>
+        <div class="xp-sec">largest unspent outputs</div>
+        ${utxos}
+        <div class="xp-load" style="padding:12px 0 0;font-size:10px;text-align:left">This is the visible, transparent balance — the amounts anyone can read. Coins this key holds in stealth or RingCT carry no address and aren't counted.</div>
+        <div class="xp-foot"><span></span>
+          <a href="${esc(explorerAddr(id))}" target="_blank" rel="noopener">Veil explorer ↗</a></div>
+      </div>`);
+  }
   function routeXp(){
-    const m = location.hash.match(/^#\/(block|tx)\/([^@]+)(?:@(.+))?$/);
+    const m = location.hash.match(/^#\/(block|tx|address)\/([^@]+)(?:@(.+))?$/);
     if (!m){ xpEl.classList.remove("open"); return; }
     if (m[1] === "block") xpRenderBlock(m[2]);
+    else if (m[1] === "address") xpRenderAddress(m[2]);
     else xpRenderTx(m[2], m[3] || null);
   }
   window.addEventListener("hashchange", routeXp);

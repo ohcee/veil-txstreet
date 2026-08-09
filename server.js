@@ -67,6 +67,13 @@ function fetchPrice() {
   }).on("error", () => {}).on("timeout", function () { this.destroy(); });
 }
 if (priceAuto) { fetchPrice(); setInterval(fetchPrice, 300000); }   // refresh every 5 min
+function checkSeed(){
+  if (SEED_HOST === "off"){ seedInfo = null; return; }
+  dns.resolve4(SEED_HOST, (err, addrs) => {
+    seedInfo = err ? { host: SEED_HOST, up: false, count: 0 }
+                   : { host: SEED_HOST, up: (addrs || []).length > 0, count: (addrs || []).length };
+  });
+}
 
 // Veil pays its monthly budget on a superblock every 43200 blocks (~30d at 60s).
 // There is no RPC for it — block explorers derive it from this same constant.
@@ -81,6 +88,15 @@ const MAX_EVENTS = 3000;
 const events = [];
 let avgBlockSec = 0;      // chain-wide mean block spacing, from getchainalgostats
 let stats = { mode: "offline", network: "veil", height: 0, difficulty: 0, hashrate: 0, mempool: 0, usd: 0, updated: Date.now() };
+const dns = require("dns");
+let netInfo = null;                          // peer count / versions from getpeerinfo
+let seedInfo = null;                         // DNS seeder liveness (seed.veil-info.org)
+const SEED_HOST = process.env.VEIL_SEED_HOST || fileCfg.seedHost || "seed.veil-info.org";
+const blockGaps = [];                        // observed spacing of recent blocks (seconds)
+let lastArrival = null;
+const memHist = [];                          // mempool depth, downsampled
+let memSampleCtr = 0;
+checkSeed(); setInterval(checkSeed, 120000);   // seeder liveness, after SEED_HOST exists
 
 function push(ev) {
   ev.seq = ++seq;
@@ -235,6 +251,19 @@ async function poll() {
     const info = await rpc("getblockchaininfo");
     const mining = await rpc("getmininginfo").catch(() => null);
     const mem = await rpc("getmempoolinfo").catch(() => ({ size: 0 }));
+    const peers = await rpc("getpeerinfo").catch(() => null);
+    if (Array.isArray(peers)){
+      const vers = {}; let inb = 0, outb = 0;
+      for (const pr of peers){ (pr.inbound ? inb++ : outb++);
+        const v = (pr.subver || "?").replace(/[/]/g, "").replace(/^Veil:?/i, "") || "?";
+        vers[v] = (vers[v] || 0) + 1; }
+      netInfo = { peers: peers.length, inbound: inb, outbound: outb,
+                  versions: Object.entries(vers).sort((a,b) => b[1]-a[1]).slice(0, 5) };
+    }
+    // mempool depth history, downsampled to ~every 15s for a ~15min window
+    if (++memSampleCtr >= Math.max(1, Math.round(15000 / CFG.pollMs))){
+      memSampleCtr = 0; memHist.push(mem.size || 0); if (memHist.length > 60) memHist.shift();
+    }
     const height = info.blocks;
     // Veil ships a chain-wide algo/timing summary — a far better average than timing
     // arrivals ourselves (that measure drifts with poll latency and closed tabs)
@@ -279,6 +308,9 @@ async function poll() {
             known.delete(tid);
           });
           for (const tid of txids) rememberTx(tid, h, hash);
+          const nowS = Date.now() / 1000;
+          if (lastArrival){ blockGaps.push(Math.round(nowS - lastArrival)); if (blockGaps.length > 60) blockGaps.shift(); }
+          lastArrival = nowS;
           push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000, txids, superblock: isSuperblock(h) });
         } catch (_) {}
       }
@@ -300,6 +332,8 @@ async function poll() {
                              hours: (algoStats.finish - algoStats.start) / 3600 } : null,
       diffs: { pos: info.difficulty_pos || 0, progpow: info.difficulty_progpow || 0,
                randomx: info.difficulty_randomx || 0, sha256d: info.difficulty_sha256d || 0 },
+      net: netInfo, seed: seedInfo,
+      blockGaps: blockGaps.slice(-40), memHist: memHist.slice(-40),
       updated: Date.now(),
     };
 
@@ -622,11 +656,81 @@ async function apiTx(id, blockHint){
 }
 
 // ---------------------------------------------------------------------------
+// Address page — no address index on the node, but scantxoutset gives an exact
+// balance and UTXO set for one address. It scans the whole UTXO set (~seconds), so
+// results are cached briefly and scans are serialized: a crowd clicking addresses
+// can't stampede the node.
+// ---------------------------------------------------------------------------
+const addrCache = new Map();                 // address -> { at, payload }
+let addrScanChain = Promise.resolve();       // serialize the expensive scans
+async function apiAddress(addr){
+  if (!addr || addr.length < 20 || addr.length > 120) throw new Error("not an address");
+  const cached = addrCache.get(addr);
+  if (cached && Date.now() - cached.at < 60000) return cached.payload;
+  const vi = await rpc("validateaddress", [addr]).catch(() => null);
+  if (!vi || !vi.isvalid) throw new Error("not a valid Veil address");
+  const run = addrScanChain.then(() => rpc("scantxoutset", ["start", [`addr(${addr})`]]));
+  addrScanChain = run.catch(() => {});       // keep the chain alive even if one fails
+  const r = await run;
+  const utxos = (r && r.unspents) || [];
+  let total = 0, sb = 0;
+  const list = utxos.map(u => { total += u.amount || 0;
+      if (u.height && u.height % SUPERBLOCK_INTERVAL === 0 && (u.amount || 0) >= 1000) sb++;
+      return { amount: u.amount, height: u.height }; })
+    .sort((a, b) => b.amount - a.amount);
+  const payload = { ok: true, address: addr, valid: true,
+    label: SNITCH_LABELS[addr] || (sb > 0 ? "budget" : ""),
+    balance: +total.toFixed(8), utxos: utxos.length, usd: usdPrice,
+    top: list.slice(0, 12), scannedAt: Date.now() };
+  addrCache.set(addr, { at: Date.now(), payload });
+  if (addrCache.size > 60){ for (const k of addrCache.keys()){ addrCache.delete(k); break; } }
+  return payload;
+}
+// resolve a search box query to the right page
+async function apiSearch(q){
+  q = (q || "").trim();
+  if (!q) return { kind: "none" };
+  if (/^\d+$/.test(q)){
+    const n = +q;
+    const h = await rpc("getblockhash", [n]).catch(() => null);
+    return h ? { kind: "block", id: String(n) } : { kind: "none" };
+  }
+  if (HEX64.test(q)){
+    const hdr = await rpc("getblockheader", [q]).catch(() => null);
+    return hdr ? { kind: "block", id: q } : { kind: "tx", id: q };  // hash that isn't a block -> try tx
+  }
+  const vi = await rpc("validateaddress", [q]).catch(() => null);
+  if (vi && vi.isvalid) return { kind: "address", id: q };
+  return { kind: "none" };
+}
+
+// crude per-IP token bucket — enough to stop one client hammering the RPC-backed
+// endpoints when this is public. Cheap calls cost 1, an address scan costs 6.
+const buckets = new Map();
+function rateOk(ip, cost){
+  const now = Date.now(), CAP = 40, REFILL = 40 / 10000;   // 40 tokens / 10s
+  let b = buckets.get(ip);
+  if (!b){ b = { t: CAP, ts: now }; buckets.set(ip, b); }
+  b.t = Math.min(CAP, b.t + (now - b.ts) * REFILL); b.ts = now;
+  if (buckets.size > 5000){ for (const k of buckets.keys()){ buckets.delete(k); break; } }
+  if (b.t < cost) return false;
+  b.t -= cost; return true;
+}
+
+// ---------------------------------------------------------------------------
 // HTTP server (static + /api/state)
 // ---------------------------------------------------------------------------
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
 const server = http.createServer((req, res) => {
+  // public-facing basics: GET only, sane URL length, and a per-IP rate limit on /api
+  if (req.method !== "GET" && req.method !== "HEAD"){ res.writeHead(405); res.end("method not allowed"); return; }
+  if (req.url.length > 1024){ res.writeHead(414); res.end("uri too long"); return; }
   const u = new URL(req.url, "http://localhost");
+  if (u.pathname.startsWith("/api/")){
+    const ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "?";
+    const cost = u.pathname === "/api/address" ? 6 : 1;
+    if (!rateOk(ip, cost)){ res.writeHead(429, { "Retry-After": "3" }); res.end('{"ok":false,"error":"slow down"}'); return; }
+  }
   if (u.pathname === "/api/state") {
     const from = +(u.searchParams.get("since") || -1);
     // computed per request so the clock advances smoothly instead of in 2.5s steps
@@ -636,10 +740,24 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify(payload));
     return;
   }
+  if (u.pathname === "/api/address") {
+    apiAddress((u.searchParams.get("id") || "").trim())
+      .then(payload => { res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+                         res.end(JSON.stringify(payload)); })
+      .catch(e => { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: false, error: e.message })); });
+    return;
+  }
+  if (u.pathname === "/api/search") {
+    apiSearch((u.searchParams.get("q") || "").slice(0, 120))
+      .then(r => { res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
+                   res.end(JSON.stringify(r)); })
+      .catch(() => { res.writeHead(200, { "Content-Type": "application/json" }); res.end('{"kind":"none"}'); });
+    return;
+  }
   if (u.pathname === "/api/block" || u.pathname === "/api/tx") {
     const wants = u.pathname === "/api/block";
-    const id = (u.searchParams.get("id") || "").trim();
-    const hint = (u.searchParams.get("block") || "").trim();
+    const id = (u.searchParams.get("id") || "").slice(0, 80).trim();
+    const hint = (u.searchParams.get("block") || "").slice(0, 70).trim();
     (wants ? apiBlock(id) : apiTx(id, hint))
       .then(payload => { res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
                          res.end(JSON.stringify(payload)); })
