@@ -10,6 +10,8 @@
   "rpcCookie": "",
   "pollMs": 2500,
   "mockBlockMs": 60000,
+  "_usd_note": "USD figures use a live NonKYC price. Pin \"veilUsd\": 0.0012 to fix it, or set \"noUsd\": true (env VEIL_NO_USD=1) to drop all dollar figures. Use this on testnet, where coins have no market value.",
+  "noUsd": false,
   "_snitchLabels_note": "Optional: name known transparent addresses in the Snitch List (also see snitch-labels.json)",
   "snitchLabels": {}
 }

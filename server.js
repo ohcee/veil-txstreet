@@ -48,13 +48,16 @@ const CFG = {
   // the auto price (NonKYC market); veilMarket points at another NonKYC pair.
   veilUsd: +(process.env.VEIL_USD || fileCfg.veilUsd || 0),
   veilMarket: process.env.VEIL_MARKET || fileCfg.veilMarket || "VEIL_USDT",
+  // testnet coins have no market value, so set VEIL_NO_USD=1 to drop all dollar
+  // figures (the UI falls back to VEIL amounts everywhere).
+  noUsd: /^(1|true|yes|on)$/i.test(process.env.VEIL_NO_USD || "") || !!fileCfg.noUsd,
 };
 
 // ---------------------------------------------------------------------------
 // VEIL/USD price (for dollar fee estimates) — pinned, or polled from NonKYC
 // ---------------------------------------------------------------------------
 let usdPrice = CFG.veilUsd;                 // 0 until known
-const priceAuto = !CFG.veilUsd;             // only auto-fetch when not pinned
+const priceAuto = !CFG.veilUsd && !CFG.noUsd;   // don't fetch when pinned or USD is off
 function fetchPrice() {
   if (!priceAuto) return;
   const url = `https://api.nonkyc.io/api/v2/market/getbysymbol/${encodeURIComponent(CFG.veilMarket)}`;
@@ -376,7 +379,7 @@ async function poll() {
 function randHex(n) { let s = ""; const h = "0123456789abcdef"; for (let i = 0; i < n; i++) s += h[(Math.random() * 16) | 0]; return s; }
 function startMock() {
   let h = 3_200_000 + ((Math.random() * 5000) | 0);
-  stats = { mode: "live", network: "mock", height: h, difficulty: 230000, hashrate: 400e6, mempool: 0, usd: usdPrice || 0.0016, updated: Date.now() };
+  stats = { mode: "live", network: "mock", height: h, difficulty: 230000, hashrate: 400e6, mempool: 0, usd: CFG.noUsd ? 0 : (usdPrice || 0.0016), updated: Date.now() };
   setInterval(() => {
     stats.hashrate = Math.max(2e8, stats.hashrate + (Math.random() - 0.5) * 3e7);
     stats.difficulty = Math.max(1e5, stats.difficulty + (Math.random() - 0.5) * 8000);
