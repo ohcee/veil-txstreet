@@ -35,6 +35,18 @@ Built with a zero-dependency Node backend (`server.js`) and a single self-contai
 
 ---
 
+## Live
+
+Running on both chains, each reading its own node:
+
+* mainnet: **https://street.veil-info.org**
+* testnet: **https://testnet-street.veil-info.org**
+
+To host your own, see [DEPLOY.md](DEPLOY.md): a systemd service bound to localhost
+behind Caddy for TLS, reading a local `veild`.
+
+---
+
 ## Quick start
 
 **With a local Veil node (the real thing):**
@@ -81,8 +93,10 @@ simulation, so it never breaks.
 | `getmempoolinfo` | mempool size |
 | `getrawmempool true` | new transactions (vSize, fee, time) |
 | `getrawtransaction <txid> true` | classify Basecoin / Stealth / RingCT by output type |
-| `getblockhash` / `getblock` | new blocks (hash, tx count, algorithm, txids) |
-| `scantxoutset` | exact balances for the Snitch List |
+| `getblockhash` / `getblock` | new blocks (hash, tx count, algorithm, txids), and the in-app block/tx pages |
+| `scantxoutset` | exact balances for the Snitch List and the address page |
+| `validateaddress` | resolve a search query or address page |
+| `getpeerinfo` | peer count and versions for the network panel |
 
 Node config (`veil.conf`):
 
@@ -100,8 +114,15 @@ Clicking any block or transaction in the feed, the recent-blocks strip, or the s
 itself opens **its own data page in-app**, served off your node: block pages with
 header fields, per-algo detail and the tx list; transaction pages with type, ring size,
 commitments, and the RingCT fee (which Veil keeps in the clear even when amounts are
-hidden). Pages are deep-linkable (`#/block/<height>`, `#/tx/<txid>`), with the
+hidden); and address pages with the transparent balance, its USD value, and the top
+UTXOs (with the honest caveat that only transparent coin is countable). The **search
+box** up top jumps straight to any block height, block hash, txid, or address. Pages
+are deep-linkable (`#/block/<height>`, `#/tx/<txid>`, `#/address/<addr>`), with the
 [Veil explorer](https://explorer.veil-project.com/main) one click away in the footer.
+
+The algorithm panel also carries a small **network health** readout: peer count (in and
+out), the `seed.veil-info.org` seeder's status, and two sparklines tracking recent block
+arrivals and mempool depth.
 
 ### The Snitch List
 
@@ -143,6 +164,7 @@ All optional. Env var overrides `config.json` overrides the built-in default.
 | `MOCK_BLOCK_MS` | `mockBlockMs` | `60000` | mock block interval |
 | `VEIL_USD` | `veilUsd` | *auto* | pin the VEIL→USD price; unset = live NonKYC price |
 | `VEIL_MARKET` | `veilMarket` | `VEIL_USDT` | NonKYC market for the auto price |
+| `VEIL_NO_USD` | `noUsd` | `false` | drop all USD figures (the live testnet mirror sets this) |
 | — | `snitchLabels` | — | extra `{ "<address>": "name" }` labels for the Snitch List |
 
 ---
@@ -162,7 +184,8 @@ All optional. Env var overrides `config.json` overrides the built-in default.
 
 - On phones the scene strips down to the essentials: the lane, the ship, and the
   walkers. Open it from another device via the LAN URL `start.sh` prints.
-- USD figures come from the mainnet market price, so on testnet they're decorative.
+- USD figures come from the mainnet market price. Set `VEIL_NO_USD=1` (as the live
+  testnet mirror does) to drop them, since testnet coins have no market value.
 - Rejection is honest: a transaction that boards but isn't in the found block steps
   off, sits out a few seconds by the stairs, and boards the next ship. The reverse
   holds too a walker whose tx made the block beams aboard as it lifts off, never

@@ -1,6 +1,22 @@
 # VeilStreet — the visualizer/explorer, front of a local veild.
-# Install: sudo cp deploy/veilstreet.service /etc/systemd/system/
-#          sudo systemctl daemon-reload && sudo systemctl enable --now veilstreet
+#
+# Install:
+#   sudo cp deploy/veilstreet.service /etc/systemd/system/
+#   # set User/WorkingDirectory below to the account that owns the checkout
+#   # put the RPC creds in /etc/veilstreet.env (see below), then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now veilstreet
+#
+# /etc/veilstreet.env (chmod 600, root:root) holds the settings, so no secret
+# lives in this unit or in the repo. Example:
+#   BIND=127.0.0.1
+#   PORT=8790
+#   VEIL_RPC_PORT=58812          # 58812 mainnet, 58813 testnet
+#   VEIL_RPC_USER=...            # from your veil.conf (rpcuser/rpcpassword)
+#   VEIL_RPC_PASS=...
+#   # or, if your node writes a cookie instead of user/pass:
+#   #   VEIL_RPC_COOKIE=/home/USER/.veil/.cookie   (read fresh each call, so it
+#   #   survives a veild restart that rotates the cookie)
+#   # on testnet add:  VEIL_NO_USD=1               (drops meaningless dollar figures)
 [Unit]
 Description=VeilStreet visualizer and block explorer
 After=network-online.target
@@ -8,21 +24,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# adjust User and WorkingDirectory to wherever you cloned the repo
+# set these two to the checkout's owner and path
 User=veil
 WorkingDirectory=/home/veil/veil-txstreet
+EnvironmentFile=/etc/veilstreet.env
 ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=3
-# bind to localhost only — Caddy is the public face
-Environment=BIND=127.0.0.1
-Environment=PORT=8790
-# the local node's RPC (match your veil.conf). Or put these in config.json instead.
-Environment=VEIL_RPC_HOST=127.0.0.1
-Environment=VEIL_RPC_PORT=58812
-Environment=VEIL_RPC_USER=veilrpc
-Environment=VEIL_RPC_PASS=CHANGE_ME
-# a little hardening
+# hardening. bind is 127.0.0.1 (from the env file), Caddy is the public face
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only

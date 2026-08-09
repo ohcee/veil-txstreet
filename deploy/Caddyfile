@@ -1,25 +1,34 @@
-# VeilStreet behind Caddy — automatic HTTPS, gzip, and a reverse proxy to the app.
-# Point the DNS A record for this name at the VPS, drop this in /etc/caddy/Caddyfile
-# (or import it), and `sudo systemctl reload caddy`.
+# VeilStreet behind Caddy. Automatic HTTPS and a reverse proxy to the app.
+# Point the DNS A record (grey-cloud / DNS-only if you use Cloudflare, so the
+# HTTP-01 challenge reaches the origin) at the VPS, then either drop this in
+# /etc/caddy/Caddyfile or append the block to an existing one, and reload:
+#   sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+#   sudo systemctl reload caddy
+#
+# NOTE: no `log { output file ... }` here on purpose. The distro caddy.service
+# sandbox refuses to write /var/log/caddy even after a chown, and a file-log
+# directive makes `caddy reload` fail (HTTP 400). Access logs go to journald
+# (journalctl -u caddy). If you really want a file log, add LogsDirectory=caddy
+# to the caddy unit first.
 
 street.veil-info.org {
 	encode zstd gzip
-	# the app binds 127.0.0.1:8790 (BIND=127.0.0.1 in the service)
+	# the app binds 127.0.0.1:8790 (BIND=127.0.0.1 in /etc/veilstreet.env)
 	reverse_proxy 127.0.0.1:8790
-
-	# a light edge limit in addition to the app's own per-IP bucket
+	# app already sends no-store on /api, this is belt-and-suspenders at the edge
 	@api path /api/*
 	header @api Cache-Control "no-store"
-
-	log {
-		output file /var/log/caddy/veilstreet.log
-		format console
+	header {
+		-Server
 	}
 }
 
-# testnet mirror on the testnet VPS — same block, its own name and node port.
-# On that box the app auto-detects the testnet node (RPC 58813), so nothing else changes.
+# testnet mirror. Identical block, its own name. On the testnet box the app
+# talks to the testnet node (VEIL_RPC_PORT=58813) with VEIL_NO_USD=1.
 # testnet-street.veil-info.org {
 # 	encode zstd gzip
 # 	reverse_proxy 127.0.0.1:8790
+# 	@api path /api/*
+# 	header @api Cache-Control "no-store"
+# 	header { -Server }
 # }
