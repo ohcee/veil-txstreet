@@ -287,6 +287,20 @@ async function poll() {
     if (lastHeight === null) {
       try { const th = await rpc("getblockhash", [height]); const tb = await rpc("getblock", [th]);
              const nowSec = Date.now()/1000; tipTime = Math.min(tb.time || nowSec, nowSec); } catch (_) {}
+      // and preload the last few blocks into the event ring: the page seeds its
+      // recent strip from this backlog, and a freshly restarted server should
+      // not hand every visitor an empty history until new blocks trickle in
+      for (let h = Math.max(1, height - 7); h <= height; h++) {
+        try {
+          const bh2 = await rpc("getblockhash", [h]);
+          const blk = await rpc("getblock", [bh2]);          // verbosity 1: txids as strings
+          const tids = (blk.tx || []).slice(0, 500);
+          for (const tid of tids) rememberTx(tid, h, bh2);
+          push({ kind: "block", height: h, hash: bh2, txcount: (blk.tx || []).length,
+                 size: blk.size || 0, algo: detectAlgo(blk),
+                 time: blk.time || Date.now() / 1000, txids: tids, superblock: isSuperblock(h) });
+        } catch (_) {}
+      }
     }
 
     // new blocks
