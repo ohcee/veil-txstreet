@@ -943,6 +943,9 @@
   let light = "red", lightTimer = 0;
 
   function mineBlock(block) {
+    // the same block only lands once: a duplicated or replayed event must not
+    // launch a second ship or print the height twice in the recent strip
+    if (block && block.height != null && recentBlocks.some(rb => rb.height === block.height)) return;
     let lead = buses.find(b => b.state === "waiting");
     if (!lead){
       // between ships (or the tab was hidden and nothing animated): promote the one

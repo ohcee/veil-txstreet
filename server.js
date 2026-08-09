@@ -248,7 +248,12 @@ let lastHeight = null;
 let tipTime = null;                       // unix time of the tip block (for "time since block")
 let warned = false;
 
+let polling = false;
 async function poll() {
+  // a slow poll must not overlap the next tick: two walkers reading the same stale
+  // lastHeight would each push the new block, and every block prints twice
+  if (polling) return;
+  polling = true;
   try {
     if (!rpcPortLocked && !(await detectPort())) {
       stats = { ...stats, mode: "offline", updated: Date.now() };
@@ -372,6 +377,8 @@ async function poll() {
       console.log("  chain on RPC " + CFG.rpcPort + " went away — re-detecting");
       rpcPortLocked = false; rpcMisses = 0; lastHeight = null; known.clear();
     }
+  } finally {
+    polling = false;
   }
 }
 
