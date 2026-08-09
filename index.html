@@ -891,21 +891,36 @@
     if (lead) {
       lead.algo = algo;
       if (block) { lead.blockHeight = block.height; lead.blockHash = block.hash; lead.blockTxcount = block.txcount; }
-      // every block has a coinbase: make sure its miner is aboard before takeoff.
-      // if one is still walking, snap it into this ship (it made it just in time).
+      // every block has a coinbase, so the departing ship shows its pilot — but where
+      // that pilot comes from follows the block's consensus. A PoW coinbase was earned
+      // grinding outside, so the astronaut who walked it down goes WITH the ship,
+      // beamed aboard in stardust however far along it is (leaving it for the next
+      // ship meant fast blocks flew off pilotless while the astronaut lingered).
+      // A PoS coinbase never touched the mine: the reward is staked by a wallet that
+      // was aboard all along, so the astronaut materialises INSIDE the cabin at the
+      // console — and any walker still out there turns back empty-handed, because
+      // the mine didn't win this one.
       if (!lead.hasPilot) {
-        // the block always has a coinbase, so the departing ship shows its pilot — and
-        // the astronaut walking it down goes WITH it, beamed aboard in stardust however
-        // far along it is. Leaving it to serve the next ship meant a fast block flew
-        // off with a pilot while the same astronaut lingered for the following one,
-        // and no fresh astronaut ever came out of the mine.
         lead.hasPilot = true;
         const m = people.find(p => p.miner && p.state === "walking");
-        if (m) {
+        const staked = algo === "pos" && !(m && m.escorted);   // the superblock escort delivers the budget whatever the algo
+        if (m && !staked) {
           m.state = "riding"; m.targetBus = lead;
           if (!lead.passengers.includes(m)) lead.passengers.push(m);
           for (let k = 0; k < 10; k++) m.shards.push({ x: m.x + (Math.random()-0.5)*20, y: m.y - 8,
             life: 1, vx: (Math.random()-0.5)*0.8, vy: -(0.4+Math.random()*0.8), r: 1+Math.random()*2 });
+        } else if (staked) {
+          if (m){ m.miner = false; m.astro = true; m.homeward = true; m.boards = false;
+                  m.climbing = false; m.noCoin = true; m.qx = null; m.idle = false; m.waitT = 0; }
+          const pilot = { tx: { type: "base", vsize: 300, fee: 0, hash: "" },
+            type: TX_TYPES.base, size: 1.12, speed: 0, spawnX: lead.x,
+            x: lead.x, y: lead.y + geo.busH * 0.22, tp: 0,
+            phase: 0, sway: 0, state: "riding", boards: true, miner: true,
+            cloakGoal: 0, cloak: 0, shards: [], targetBus: lead, seat: 0 };
+          for (let k = 0; k < 12; k++) pilot.shards.push({ x: pilot.x + (Math.random()-0.5)*16,
+            y: pilot.y + (Math.random()-0.5)*10,
+            life: 1, vx: (Math.random()-0.5)*0.7, vy: -(0.3+Math.random()*0.6), r: 1+Math.random()*2 });
+          people.push(pilot); lead.passengers.push(pilot);
         }
       }
       lead.state = "leaving"; lead.vy = -1.4;   // drive up toward the Blockchain sign
@@ -1446,7 +1461,14 @@
       if (p.state === "walking") {
         // materialise first, then start walking the avenue
         if (p.tp > 0) p.tp = Math.max(0, p.tp - dt * 1.7);
-        if (p.climbing) {
+        if (p.homeward) {
+          // trudging back to the mine empty-handed: the block went to a staker,
+          // so there was never a reward out here to carry
+          p.y += (geo.mineY - p.y) * Math.min(1, dt * 0.9);
+          p.x += (geo.mineX - p.x) * Math.min(1, dt * 1.1);
+          if (Math.abs(p.y - geo.mineY) < 3 && Math.abs(p.x - geo.mineX) < 4) p.state = "gone";
+        }
+        else if (p.climbing) {
           // came up out of the mine (or the stealth ground portal), then joins the corridor to the ship
           p.y -= p.speed * rush * dt * 0.9;
           p.x += (p.climbX - p.x) * Math.min(1, dt * 2);
@@ -1966,7 +1988,7 @@
     // it lands — you can tell someone is walking, not who. cloak ramps 0→1 after arrival.
     const ghost = (p.type.key === "ringct" ? 1 - 0.76 * p.cloak : 1) * veil;
     ctx.globalAlpha = (tp > 0 ? Math.min(1, (1 - tp) * 2.2) : 1) * ghost;   // fade in as it lands
-    if (p.miner) drawAstronaut(x, y, s, step, time, p);
+    if (p.miner || p.astro) drawAstronaut(x, y, s, step, time, p);
     // shapes: base = human. Stealth wears the cooler full-alien body, RingCT the hybrid
     // (the being shape is swapped from the privacy tiers; colour still marks the type).
     else drawBeing(x, y, s, step, tc, gl, time, p,
@@ -2043,14 +2065,17 @@
     ctx.fillStyle = hexA(gl,0.9); ctx.shadowColor = gl; ctx.shadowBlur = 6*s;
     ctx.beginPath(); ctx.arc(x-1*s, hy-0.2*s, 0.9*s, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
     ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.arc(x+1.2*s, hy+1.2*s, 0.5*s, 0,6.28); ctx.fill();
-    // a gold coin bobbing at his side — he carries the block reward (coinbase)
-    const cx = x + 9.5*s, cy = y - 7*s + Math.sin(time*3 + p.sway)*1.8*s;
-    ctx.fillStyle = "#dfa62a"; ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 8*s;
-    ctx.beginPath(); ctx.arc(cx, cy, 4.4*s, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
-    ctx.fillStyle = "#ffcf5a"; ctx.beginPath(); ctx.arc(cx, cy, 3.3*s, 0, 6.28); ctx.fill();
-    ctx.strokeStyle = "#8a5a00"; ctx.lineWidth = 0.9*s; ctx.lineCap = "round"; ctx.lineJoin = "round";  // Veil V struck on the coin
-    ctx.beginPath(); ctx.moveTo(cx-1.7*s, cy-1.1*s); ctx.lineTo(cx, cy+1.7*s); ctx.lineTo(cx+1.7*s, cy-1.1*s); ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.beginPath(); ctx.arc(cx-1.5*s, cy-1.5*s, 0.8*s, 0, 6.28); ctx.fill();
+    // a gold coin bobbing at his side — he carries the block reward (coinbase).
+    // No coin on the walk home: a stake block paid its reward inside the ship.
+    if (!(p && p.noCoin)){
+      const cx = x + 9.5*s, cy = y - 7*s + Math.sin(time*3 + p.sway)*1.8*s;
+      ctx.fillStyle = "#dfa62a"; ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 8*s;
+      ctx.beginPath(); ctx.arc(cx, cy, 4.4*s, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fillStyle = "#ffcf5a"; ctx.beginPath(); ctx.arc(cx, cy, 3.3*s, 0, 6.28); ctx.fill();
+      ctx.strokeStyle = "#8a5a00"; ctx.lineWidth = 0.9*s; ctx.lineCap = "round"; ctx.lineJoin = "round";  // Veil V struck on the coin
+      ctx.beginPath(); ctx.moveTo(cx-1.7*s, cy-1.1*s); ctx.lineTo(cx, cy+1.7*s); ctx.lineTo(cx+1.7*s, cy-1.1*s); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.beginPath(); ctx.arc(cx-1.5*s, cy-1.5*s, 0.8*s, 0, 6.28); ctx.fill();
+    }
   }
 
   // the Veil "V" every Veilian wears on its face — the brand mark, glowing over the
