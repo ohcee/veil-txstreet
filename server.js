@@ -35,6 +35,7 @@ const CFG = {
   snitchBackfill: 20000,     // blocks to walk back once, seeding the snitch list
   snitchEveryMs: 90000,      // how often to re-price the harvested addresses
   port: +(process.env.PORT || fileCfg.port || 8790),
+  host: process.env.BIND || fileCfg.host || "0.0.0.0",   // set BIND=127.0.0.1 behind a proxy
   feed: (process.env.FEED || fileCfg.feed || "rpc").toLowerCase(),
   rpcHost: process.env.VEIL_RPC_HOST || fileCfg.rpcHost || "127.0.0.1",
   rpcPort: +(process.env.VEIL_RPC_PORT || fileCfg.rpcPort || 0) || 0,   // 0 = auto-detect mainnet/testnet
@@ -799,8 +800,8 @@ server.on("error", (e) => {
   }
   throw e;
 });
-server.listen(CFG.port, () => {
-  console.log(`\n  VeilStreet  →  http://localhost:${CFG.port}`);
+server.listen(CFG.port, CFG.host, () => {
+  console.log(`\n  VeilStreet  →  http://${CFG.host === "0.0.0.0" ? "localhost" : CFG.host}:${CFG.port}`);
   console.log(`  feed: ${CFG.feed.toUpperCase()}` + (CFG.feed === "rpc" ? `  (veild ${CFG.rpcHost}:${CFG.rpcPort || "auto-detect"})` : "") + "\n");
   if (CFG.feed === "mock") startMock();
   else {

@@ -1,0 +1,25 @@
+# VeilStreet behind Caddy — automatic HTTPS, gzip, and a reverse proxy to the app.
+# Point the DNS A record for this name at the VPS, drop this in /etc/caddy/Caddyfile
+# (or import it), and `sudo systemctl reload caddy`.
+
+street.veil-info.org {
+	encode zstd gzip
+	# the app binds 127.0.0.1:8790 (BIND=127.0.0.1 in the service)
+	reverse_proxy 127.0.0.1:8790
+
+	# a light edge limit in addition to the app's own per-IP bucket
+	@api path /api/*
+	header @api Cache-Control "no-store"
+
+	log {
+		output file /var/log/caddy/veilstreet.log
+		format console
+	}
+}
+
+# testnet mirror on the testnet VPS — same block, its own name and node port.
+# On that box the app auto-detects the testnet node (RPC 58813), so nothing else changes.
+# testnet-street.veil-info.org {
+# 	encode zstd gzip
+# 	reverse_proxy 127.0.0.1:8790
+# }

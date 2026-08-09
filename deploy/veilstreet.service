@@ -1,0 +1,33 @@
+# VeilStreet — the visualizer/explorer, front of a local veild.
+# Install: sudo cp deploy/veilstreet.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now veilstreet
+[Unit]
+Description=VeilStreet visualizer and block explorer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# adjust User and WorkingDirectory to wherever you cloned the repo
+User=veil
+WorkingDirectory=/home/veil/veil-txstreet
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=3
+# bind to localhost only — Caddy is the public face
+Environment=BIND=127.0.0.1
+Environment=PORT=8790
+# the local node's RPC (match your veil.conf). Or put these in config.json instead.
+Environment=VEIL_RPC_HOST=127.0.0.1
+Environment=VEIL_RPC_PORT=58812
+Environment=VEIL_RPC_USER=veilrpc
+Environment=VEIL_RPC_PASS=CHANGE_ME
+# a little hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/veil/veil-txstreet
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
