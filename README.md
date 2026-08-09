@@ -16,15 +16,17 @@ arrives** — the arrival is a picture of its traceability:
 | **Stealth** (cyan) | full alien | surfaces through a ground portal you see the point, not the source |
 | **RingCT** (magenta) | hybrid, cloaked to a faint ghost | arrives under **the veil** a dark curtain hiding twelve portals (one per ring in the signature). The field only lights up *through* the cloth when a transaction lands, every portal flashing at once, and the Veilian walks out from under the sign no telling which door |
 
-The block's **coinbase** is an astronaut who climbs out of the mine carrying a gold
-coin (on a superblock he gets an armed escort that's the monthly budget payout), and
-the coin rides in the ship's cockpit. That's the PoW story. About half of Veil's
-blocks are staked, not mined, and staking is holding: at the **STAKING CULT** in the
-lower bushes three hodlers stand in a circle around the stake crystal doing nothing,
-which is the whole practice. When a stake wins a block one of them ascends in green
-stardust, the coin materialises at the ship's console, and any astronaut still
-walking from the mine turns back empty handed. The departing ship is stamped
-**MINED** or **STAKED** so you always know which way the block was won. Figure size tracks transaction **vSize** (amounts
+The block's **coinbase** never walks the street. At the **COINBASE MINE** a crew of
+three astronauts swings at the rock face without pause, because mining is grinding
+in place: when a PoW block is found, the one whose pick struck it raises it high and
+teleports aboard in gold stardust, the coin materialising at the ship's console.
+About half of Veil's blocks are staked, not mined, and staking is holding: at the
+**STAKING CULT** in the lower bushes three hodlers stand in a circle around a
+spinning Veil coin doing nothing, which is the whole practice. When a stake wins,
+the chosen one raises their arms and ascends in green stardust the same way. The one
+walk left is the **superblock** escort: every 43,200 blocks the monthly budget
+payout leaves the mine under armed guard and boards in person. The departing ship is
+stamped **MINED** or **STAKED** so you always know which way the block was won. Figure size tracks transaction **vSize** (amounts
 are hidden on a privacy chain, like TxStreet's Monero street); walking speed tracks fee
 priority.
 

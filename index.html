@@ -655,6 +655,61 @@
     }
   }
   // the coinbase mine dug into the lower bushes — where the block's miner climbs out
+  // the mine's crew: three astronauts who swing at the face and never stop — mining
+  // IS grinding in place. When a PoW block is found one of them made the strike:
+  // they raise the pick, teleport aboard in gold stardust, and a fresh one climbs
+  // back to the face a while later. Nobody walks the street with the reward — the
+  // only walk left is the superblock escort delivering the budget.
+  const mineCrew = [
+    { present: true, respawnT: 0, dissolveT: 0, appearT: 0, chosenT: 0 },
+    { present: true, respawnT: 0, dissolveT: 0, appearT: 0, chosenT: 0 },
+    { present: true, respawnT: 0, dissolveT: 0, appearT: 0, chosenT: 0 },
+  ];
+  function drawMineCrew(time){
+    const mx = geo.mineX, my = geo.mineY, gold = "#ffcf5a";
+    const spots = [{ dx: -32, dy: 14 }, { dx: 30, dy: 12 }, { dx: -2, dy: 24 }];
+    for (let i = 0; i < mineCrew.length; i++){
+      const mc = mineCrew[i], sx = mx + spots[i].dx, sy = my + spots[i].dy;
+      if (mc.chosenT > 0){
+        // the strike: pick held high, lit gold, a breath before teleporting up
+        const lift = (1 - mc.chosenT / 0.9) * 3;
+        const ag = ctx.createRadialGradient(sx, sy - 6, 1, sx, sy - 6, 16);
+        ag.addColorStop(0, hexA(gold, 0.30 + 0.18 * Math.sin(time * 9)));
+        ag.addColorStop(1, hexA(gold, 0));
+        ctx.fillStyle = ag; ctx.beginPath(); ctx.ellipse(sx, sy - 6, 16, 18, 0, 0, 6.28); ctx.fill();
+        drawAstronaut(sx, sy - lift, 0.78, 0, time, { sway: i, swing: -1.1, noCoin: true });
+        continue;
+      }
+      if (mc.dissolveT > 0){
+        // gone to pilot the block they found — gold stardust streams upward
+        const t = 1 - mc.dissolveT / 0.7;
+        ctx.fillStyle = hexA(gold, 0.8 * (1 - t));
+        for (let k = 0; k < 7; k++){
+          const a = k * 0.9 + i;
+          ctx.fillRect(sx + Math.cos(a) * (3 + t * 11) - 1, sy - 4 - t * 26 - (k % 3) * 5, 2, 2);
+        }
+        continue;
+      }
+      if (!mc.present){
+        // their place at the face shimmers faintly until they climb back
+        ctx.fillStyle = hexA(gold, 0.08 + 0.05 * Math.sin(time * 2.4 + i));
+        ctx.beginPath(); ctx.ellipse(sx, sy - 2, 7, 10, 0, 0, 6.28); ctx.fill();
+        continue;
+      }
+      const fade = mc.appearT > 0 ? 1 - mc.appearT / 0.8 : 1;
+      const ph = i * 2.3;
+      const swing = Math.sin(time * 3.5 + ph) * 0.7 + 0.35;   // the endless grind
+      ctx.save(); ctx.globalAlpha = fade;
+      drawAstronaut(sx, sy + Math.abs(Math.sin(time * 3.5 + ph)) * 0.8, 0.78, 0, time,
+                    { sway: i, swing, noCoin: true });
+      ctx.restore();
+      if (Math.sin(time * 3.5 + ph) > 0.88){                   // the pick bites: sparks
+        ctx.fillStyle = hexA(gold, 0.85);
+        ctx.fillRect(sx - 11, sy + 4, 2, 2); ctx.fillRect(sx - 14, sy + 1, 1.6, 1.6);
+        ctx.fillRect(sx - 9, sy + 7, 1.4, 1.4);
+      }
+    }
+  }
   // the staking cult's members: three hodlers who stand over their stacks and never
   // walk anywhere — staking IS holding. Every PoS block one of them quietly wins:
   // they dissolve aboard in green stardust and come back restaked a while later.
@@ -988,6 +1043,12 @@
       if (won.length){ const hd = won[(Math.random() * won.length) | 0];
         // the chosen one gets a beat to raise their arms before ascending
         hd.chosenT = 0.9; hd.respawnT = 16 + Math.random() * 10; }
+    } else if (algo && algo !== "unknown"){
+      // a PoW block: someone's pick just struck it. They raise the pick, then
+      // teleport aboard the same way the stakers do, in gold instead of green
+      const struck = mineCrew.filter(mc => mc.present && !(mc.chosenT > 0));
+      if (struck.length){ const mc = struck[(Math.random() * struck.length) | 0];
+        mc.chosenT = 0.9; mc.respawnT = 16 + Math.random() * 10; }
     }
     if (lead) {
       lead.algo = algo;
@@ -1003,18 +1064,21 @@
       // the mine didn't win this one.
       if (!lead.hasPilot) {
         lead.hasPilot = true;
+        // the only walker left on the street is the superblock escort delivering
+        // the budget: if one is out there it boards whatever the algo, beamed
+        // aboard in stardust however far along it is
         const m = people.find(p => p.miner && p.state === "walking");
-        const staked = algo === "pos" && !(m && m.escorted);   // the superblock escort delivers the budget whatever the algo
-        if (m && !staked) {
+        if (m) {
           m.state = "riding"; m.targetBus = lead;
           if (!lead.passengers.includes(m)) lead.passengers.push(m);
           for (let k = 0; k < 10; k++) m.shards.push({ x: m.x + (Math.random()-0.5)*20, y: m.y - 8,
             life: 1, vx: (Math.random()-0.5)*0.8, vy: -(0.4+Math.random()*0.8), r: 1+Math.random()*2 });
-        } else if (staked) {
-          if (m){ m.miner = false; m.astro = true; m.homeward = true; m.boards = false;
-                  m.climbing = false; m.noCoin = true; m.qx = null; m.idle = false; m.waitT = 0; }
+        } else {
+          // nobody walks the reward over: the coinbase materialises at the console.
+          // Green stardust for a stake, gold for a strike teleported up from the mine.
+          const puff = algo === "pos" ? "#3dff9a" : "#ffcf5a";
           const pilot = { tx: { type: "base", vsize: 300, fee: 0, hash: "" },
-            type: Object.assign({}, TX_TYPES.base, { glow: "#3dff9a" }),   // green stardust — a staker, not a miner
+            type: Object.assign({}, TX_TYPES.base, { glow: puff }),
             size: 1.12, speed: 0, spawnX: lead.x,
             x: lead.x, y: lead.y + geo.busH * 0.22, tp: 0,
             phase: 0, sway: 0, state: "riding", boards: true, miner: true,
@@ -1530,7 +1594,10 @@
 
     // keep the forming block's coinbase climbing out of the mine (one at a time)
     const formingShip = buses.find(b => b.state === "waiting");
-    if (formingShip && !formingShip.hasPilot && !people.some(p => p.miner && p.state === "walking")) spawnMiner();
+    // the walk only happens for the superblock escort — regular coinbases grind at
+    // the mine or hold at the cult, and teleport aboard when their block lands
+    if (formingShip && !formingShip.hasPilot && (FORCE_SUPER || isSuperblock(stat.height + 1)) &&
+        !people.some(p => p.miner && p.state === "walking")) spawnMiner();
 
 
     if (lightTimer > 0) { lightTimer -= dt; if (lightTimer <= 0) light = "red"; }
@@ -1554,8 +1621,9 @@
     buses = buses.filter(b => !(b.state === "leaving" && b.y < -geo.busH - 60));
     const boardingBus = buses.find(b => b.state === "waiting");
 
-    // the cult's hodlers: arms up when chosen, dissolve out, drift back later
-    for (const hd of hodlers){
+    // the cult's hodlers and the mine's crew share a life cycle: chosen beat,
+    // dissolve out, drift back later
+    for (const hd of [...hodlers, ...mineCrew]){
       if (hd.chosenT > 0){
         hd.chosenT = Math.max(0, hd.chosenT - dt);
         if (hd.chosenT === 0){ hd.present = false; hd.dissolveT = 0.7; }
@@ -1703,7 +1771,7 @@
 
     drawSidewalk(time);
     drawRoad(time);
-    if (!NARROW){ drawBushes(time); drawMine(time); drawVault(time); drawHouse(time); }  // bush field, mine, vault + house
+    if (!NARROW){ drawBushes(time); drawMine(time); drawMineCrew(time); drawVault(time); drawHouse(time); }  // bush field, mine + crew, cult + house
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
     drawStairs(time);          // boarding stairs from the corridor up to the ship
@@ -2159,12 +2227,15 @@
     ctx.strokeStyle = "#b9c2d4"; ctx.lineWidth = 3*s; ctx.lineCap = "round";      // legs
     ctx.beginPath(); ctx.moveTo(x-2.6*s, y+2*s); ctx.lineTo(x-3*s+step*3*s, y+9*s); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x+2.6*s, y+2*s); ctx.lineTo(x+3*s-step*3*s, y+9*s); ctx.stroke();
-    // pickaxe over the shoulder — wooden handle + curved steel head
-    const hgx = x + 4.6*s, hgy = y + 5*s, hdx = x - 5*s, hdy = y - 8.5*s;
+    // pickaxe over the shoulder — wooden handle + curved steel head. A crew miner
+    // passes p.swing and the whole tool arcs around the grip as they work the face.
+    const hgx = x + 4.6*s, hgy = y + 5*s, rdx = -9.6*s, rdy = -13.5*s;
+    ctx.save(); ctx.translate(hgx, hgy); ctx.rotate(p && p.swing != null ? p.swing : 0);
     ctx.strokeStyle = "#9a6b3f"; ctx.lineWidth = 1.8*s;
-    ctx.beginPath(); ctx.moveTo(hgx, hgy); ctx.lineTo(hdx, hdy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(rdx, rdy); ctx.stroke();
     ctx.strokeStyle = "#d7deea"; ctx.lineWidth = 1.7*s;
-    ctx.beginPath(); ctx.moveTo(hdx-2.6*s, hdy+1.4*s); ctx.quadraticCurveTo(hdx, hdy-2*s, hdx+2.7*s, hdy-0.3*s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rdx-2.6*s, rdy+1.4*s); ctx.quadraticCurveTo(rdx, rdy-2*s, rdx+2.7*s, rdy-0.3*s); ctx.stroke();
+    ctx.restore();
     ctx.fillStyle = hexA(gl,0.5); ctx.shadowColor = gl; ctx.shadowBlur = 8*s;       // thruster glow
     ctx.beginPath(); ctx.arc(x, y+6.5*s, 1.6*s, 0,6.28); ctx.fill(); ctx.shadowBlur = 0;
     const g = ctx.createLinearGradient(x, y-6*s, x, y+6*s);                          // suit
@@ -2579,7 +2650,8 @@
     recentTx = []; renderTxList();
     recentBlocks = []; renderRecentBlocks();  // drop simulated blocks
     people.length = 0;                        // remove the boot-seed Veilians so none stampede the ship
-    initBuses(); spawnMiner();                // fresh ship + its coinbase miner walking down
+    initBuses();                              // fresh ship; the walk is only for the superblock escort
+    if (FORCE_SUPER || isSuperblock(stat.height + 1)) spawnMiner();
     blockClockSynced = false;                 // re-sync the "time since block" clock from the node
     if (!didRestore){ didRestore = true; restoreState(); }   // repopulate the sidebar from last session
   }
