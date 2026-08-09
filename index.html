@@ -2747,7 +2747,19 @@
       if (!r.ok) throw new Error("http " + r.status);
       const j = await r.json();
       if (feedFirst){ feedFirst = false; feedSeq = j.seq || 0; setMode(j.mode); applyStats(j.stats);
-                      if (j.mode === "live") syncMempool(); return; }
+                      if (j.mode === "live"){
+                        // the server remembers the last blocks, so the strip and the
+                        // feed must not open empty just because the viewer arrived
+                        // between blocks. Seed them quietly: no ships, no animation,
+                        // and mineBlock's dedupe learns these heights on the way.
+                        const past = (j.events || []).filter(ev => ev.kind === "block").slice(-14);
+                        for (const ev of past)
+                          pushRecentBlock({ height: ev.height, algo: ev.algo,
+                            txcount: ev.txcount != null ? ev.txcount : null,
+                            t: Math.min(Date.now(), (ev.time || 0) * 1000) || Date.now() });
+                        syncMempool();
+                      }
+                      return; }
       setMode(j.mode); applyStats(j.stats);
       for (const ev of (j.events || [])){
         feedSeq = Math.max(feedSeq, ev.seq);
