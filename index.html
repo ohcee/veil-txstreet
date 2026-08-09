@@ -724,7 +724,7 @@
     // not a building, a congregation: a ring pad with the locked stake hovering
     // over it as a crystal, and the faithful gathered round it. Every PoS block
     // is one of them ascending. They always come back. The coins never leave.
-    const pulse = 0.5 + 0.5 * Math.sin(time * 1.6);
+    const pulse = 0.5 + 0.5 * Math.sin(time * 1.9);   // the pad glows on the chant's beat
     const pg = ctx.createRadialGradient(vx, vy + 12, 2, vx, vy + 12, 36);
     pg.addColorStop(0, hexA(green, 0.15 + pulse * 0.07)); pg.addColorStop(1, hexA(green, 0));
     ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(vx, vy + 12, 36, 13, 0, 0, 6.28); ctx.fill();
@@ -789,9 +789,14 @@
         continue;
       }
       const fade = hd.appearT > 0 ? 1 - hd.appearT / 0.8 : 1;
+      // the chant: while the crew hammers next door, the cult keeps its own
+      // rhythm — all three lift their arms together on the beat, palms alight,
+      // and settle back down. One congregation, one voice.
+      const chant = Math.sin(time * 1.9);
+      const up = chant > 0.35;
       ctx.save(); ctx.globalAlpha = fade;
-      drawBeing(sx, sy - 4, 0.92, Math.sin(time * 1.3 + i * 2.2) * 0.16, green, glow, time,
-                { sway: i * 2.1, type: TX_TYPES.base }, "hybrid");
+      drawBeing(sx, sy - 4 - (up ? 1.2 : 0), 0.92, Math.sin(time * 1.3 + i * 2.2) * 0.16, green, glow, time,
+                { sway: i * 2.1, type: TX_TYPES.base, pose: up ? "raised" : null }, "hybrid");
       ctx.restore();
     }
   }
@@ -2729,15 +2734,40 @@
   // A refresh must not lose pending transactions: the event feed only flows forward,
   // and the saved snapshot only knows what it saw. So on load, fetch the node's actual
   // mempool and reconcile — spawn a walker and a feed row for anything we're missing.
+  // a tx the page shows as pending but the node no longer holds gets two strikes
+  // (checks are ~30s apart) before removal, so a tx confirming right now is not
+  // swept away in the gap before its block event arrives to group it properly
+  const memMisses = new Map();
   async function syncMempool(){
     let d; try { d = await (await fetch("/api/mempool", { cache: "no-store" })).json(); } catch (_) { return; }
     if (!d || !d.ok) return;
+    const nodeSet = new Set();
     for (const m of d.txs){
+      nodeSet.add(m.txid);
+      memMisses.delete(m.txid);
       mempoolSet.add(m.txid);
       const row = recentTx.find(t => t.hash === m.txid);
       const walking = people.some(p => p.tx && p.tx.hash === m.txid);
       if (row && !walking) addPerson({ reuseTx: row });                  // row survived, walker didn't
       else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid });
+    }
+    // and the other direction: still shown as pending here, gone from the node
+    // there — evicted, or confirmed in a moment we missed. These used to linger
+    // on the street until a refresh; now they are walked off within a minute.
+    for (const tid of [...mempoolSet]){
+      if (nodeSet.has(tid)) continue;
+      const strikes = (memMisses.get(tid) || 0) + 1;
+      if (strikes < 2){ memMisses.set(tid, strikes); continue; }
+      memMisses.delete(tid);
+      mempoolSet.delete(tid);
+      const ri = recentTx.findIndex(t => t.hash === tid && t.bh == null);
+      if (ri >= 0) recentTx.splice(ri, 1);
+      for (const p of people){
+        if (!p.miner && p.tx && p.tx.hash === tid && (p.state === "walking" || p.state === "boarded")){
+          if (p.targetBus && p.targetBus.passengers) p.targetBus.passengers = p.targetBus.passengers.filter(c => c !== p);
+          p.state = "gone";
+        }
+      }
     }
     renderTxList();
   }
@@ -3032,6 +3062,11 @@
   setInterval(() => { if (document.hidden) update(1.0); }, 1000);
   window.addEventListener("beforeunload", saveState);
   pollFeed(); setInterval(pollFeed, 1200);
+  // reconcile with the node's actual mempool while waiting on the next block, both
+  // directions: pending txs we missed walk on, and txs the node no longer holds
+  // walk off instead of lingering until a refresh. Real node only — the sim and
+  // the mock invent their own mempool, so there is nothing to reconcile against.
+  setInterval(() => { if (LIVE && stat.network !== "mock") syncMempool(); }, 30000);
   routeXp();                                 // deep link straight into a block/tx page
   lastTick = performance.now();
   requestAnimationFrame(frame);
