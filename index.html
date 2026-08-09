@@ -529,6 +529,10 @@
     // the coinbase mine, dug into the lower bushes, with a shaft up to the bottom bar
     geo.mineX = geo.roadX0 + rw * 0.22;
     geo.mineY = geo.bBarY1 + H * 0.17;
+    // the staking vault sits deeper in the lower bushes: PoS's answer to the mine,
+    // where the hodlers sit on their coins
+    geo.vaultX = geo.mineX + 8;
+    geo.vaultY = geo.mineY + H * 0.155;
     // the stealth portal — in the open band right of the bushes, up near the Veilian
     // with the stoplight. Stealth surfaces there and walks the band straight down.
     geo.gateX = (geo.tRight + geo.roadX1) / 2;
@@ -569,6 +573,7 @@
     if (y > geo.bBarY0 - pad && y < geo.bBarY1 + pad) return true;                      // mirrored bottom bar
     if (y >= geo.tBarY1 && y <= geo.bBarY0 && Math.abs(x - geo.tStemC) < geo.tStemW/2 + pad) return true;  // stem joining them
     if (y >= geo.bBarY1 - pad && y <= geo.mineY + 36 && Math.abs(x - geo.mineX) < 46) return true;         // shaft up from the mine
+    if (Math.abs(x - geo.vaultX) < 52 && y > geo.vaultY - 44 && y < geo.vaultY + 26) return true;          // the staking vault's clearing
     // the transparent house sits in its own clearing between the bushes, with a short
     // front path across to the stem
     if (Math.abs(x - geo.houseX) < geo.houseW * 0.85 &&
@@ -650,6 +655,70 @@
     }
   }
   // the coinbase mine dug into the lower bushes — where the block's miner climbs out
+  // the staking vault's regulars: three hodlers who sit on their stacks and never
+  // walk anywhere — staking IS holding. Every PoS block one of them quietly wins:
+  // they dissolve aboard in green stardust and come back restaked a while later.
+  const hodlers = [
+    { present: true, respawnT: 0, dissolveT: 0, appearT: 0 },
+    { present: true, respawnT: 0, dissolveT: 0, appearT: 0 },
+    { present: true, respawnT: 0, dissolveT: 0, appearT: 0 },
+  ];
+  function drawVault(time){
+    const vx = geo.vaultX, vy = geo.vaultY, w = 54, h = 34, green = "#3dff9a";
+    originSign(vx, vy - h - 14, "STAKING VAULT", green);
+    // grounded pad
+    ctx.fillStyle = "#241e38";
+    ctx.beginPath(); ctx.ellipse(vx, vy + 6, w*0.95, 11, 0, 0, 6.28); ctx.fill();
+    // a squat strongbox with a round door and a V dial
+    const g = ctx.createLinearGradient(vx, vy - h, vx, vy);
+    g.addColorStop(0, "#3a4460"); g.addColorStop(1, "#232b44");
+    ctx.fillStyle = g; roundRect(vx - w/2, vy - h, w, h, 6); ctx.fill();
+    ctx.strokeStyle = "rgba(61,255,154,0.5)"; ctx.lineWidth = 1.4; roundRect(vx - w/2, vy - h, w, h, 6); ctx.stroke();
+    ctx.fillStyle = "#141a2e"; ctx.beginPath(); ctx.arc(vx, vy - h*0.5, 9.5, 0, 6.28); ctx.fill();
+    ctx.strokeStyle = hexA(green, 0.8); ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(vx, vy - h*0.5, 9.5, 0, 6.28); ctx.stroke();
+    ctx.save(); ctx.translate(vx, vy - h*0.5); ctx.rotate(Math.sin(time*0.4)*0.5);
+    ctx.strokeStyle = green; ctx.lineWidth = 1.5; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(-3.4, -2.2); ctx.lineTo(0, 3.4); ctx.lineTo(3.4, -2.2); ctx.stroke();
+    ctx.restore();
+    // the three hodlers out front, each guarding their stake
+    for (let i = 0; i < hodlers.length; i++){
+      const hd = hodlers[i], sx = vx + (i - 1) * 20, sy = vy + 15;
+      // the stake itself: a little stack of coins. The vault keeps it warm while they ride.
+      for (let c = 0; c < 3; c++){
+        const cy2 = sy + 3 - c * 3.1;
+        ctx.fillStyle = c === 2 ? "#ffcf5a" : "#dfa62a";
+        ctx.beginPath(); ctx.ellipse(sx + 8, cy2, 4.4, 1.9, 0, 0, 6.28); ctx.fill();
+      }
+      if (hd.dissolveT > 0){
+        // their stake just won the block: the hodler streams aboard as green stardust
+        const t = 1 - hd.dissolveT / 0.7;
+        ctx.fillStyle = hexA(green, 0.75 * (1 - t));
+        for (let k = 0; k < 6; k++){
+          const a = k * 1.05 + i;
+          ctx.fillRect(sx + Math.cos(a) * (3 + t * 10) - 1, sy - 6 - t * 24 - (k % 3) * 4, 2, 2);
+        }
+        continue;
+      }
+      if (!hd.present){
+        // seat held while they ride: a soft shimmer over the stack
+        ctx.fillStyle = hexA(green, 0.10 + 0.06 * Math.sin(time * 2.4 + i));
+        ctx.beginPath(); ctx.ellipse(sx, sy - 4, 7, 9, 0, 0, 6.28); ctx.fill();
+        continue;
+      }
+      const fade = hd.appearT > 0 ? 1 - hd.appearT / 0.8 : 1;
+      ctx.globalAlpha = fade;
+      const bob = Math.sin(time * 1.1 + i * 2.1) * 0.8;
+      ctx.fillStyle = "#5a6484";                                                        // hunched body
+      ctx.beginPath(); ctx.ellipse(sx, sy - 4 + bob * 0.3, 5.2, 6.4, 0, 0, 6.28); ctx.fill();
+      ctx.fillStyle = "#6b7694";                                                        // head
+      ctx.beginPath(); ctx.arc(sx, sy - 11 + bob, 3.6, 0, 6.28); ctx.fill();
+      ctx.strokeStyle = green; ctx.lineWidth = 1; ctx.lineCap = "round";                 // the V they all wear
+      ctx.beginPath(); ctx.moveTo(sx - 1.4, sy - 11.8 + bob); ctx.lineTo(sx, sy - 9.6 + bob); ctx.lineTo(sx + 1.4, sy - 11.8 + bob); ctx.stroke();
+      ctx.strokeStyle = "#4c5573"; ctx.lineWidth = 2;                                    // arm wrapped round the stack
+      ctx.beginPath(); ctx.moveTo(sx + 2.5, sy - 6); ctx.quadraticCurveTo(sx + 8, sy - 4, sx + 8.5, sy + 0.5); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
   function drawMine(time){
     const mx = geo.mineX, my = geo.mineY, w = 62, h = 52;
     // spoil heap around the mouth
@@ -888,6 +957,13 @@
       stat.difficulty = Math.max(1e5, stat.difficulty + (Math.random() - 0.48) * 4000);
     }
     stat.lastBlock = 0; stat.lastAlgo = algo;
+    // every PoS block is a stake that won while sitting still: one of the vault's
+    // hodlers dissolves aboard, whether or not the ship still needed a pilot
+    if (algo === "pos"){
+      const won = hodlers.filter(hd => hd.present);
+      if (won.length){ const hd = won[(Math.random() * won.length) | 0];
+        hd.present = false; hd.dissolveT = 0.7; hd.respawnT = 16 + Math.random() * 10; }
+    }
     if (lead) {
       lead.algo = algo;
       if (block) { lead.blockHeight = block.height; lead.blockHash = block.hash; lead.blockTxcount = block.txcount; }
@@ -913,7 +989,8 @@
           if (m){ m.miner = false; m.astro = true; m.homeward = true; m.boards = false;
                   m.climbing = false; m.noCoin = true; m.qx = null; m.idle = false; m.waitT = 0; }
           const pilot = { tx: { type: "base", vsize: 300, fee: 0, hash: "" },
-            type: TX_TYPES.base, size: 1.12, speed: 0, spawnX: lead.x,
+            type: Object.assign({}, TX_TYPES.base, { glow: "#3dff9a" }),   // green stardust — a staker, not a miner
+            size: 1.12, speed: 0, spawnX: lead.x,
             x: lead.x, y: lead.y + geo.busH * 0.22, tp: 0,
             phase: 0, sway: 0, state: "riding", boards: true, miner: true,
             cloakGoal: 0, cloak: 0, shards: [], targetBus: lead, seat: 0 };
@@ -1452,6 +1529,13 @@
     buses = buses.filter(b => !(b.state === "leaving" && b.y < -geo.busH - 60));
     const boardingBus = buses.find(b => b.state === "waiting");
 
+    // the vault's hodlers: dissolve out when their stake wins, drift back later
+    for (const hd of hodlers){
+      if (hd.dissolveT > 0) hd.dissolveT = Math.max(0, hd.dissolveT - dt);
+      else if (!hd.present){ hd.respawnT -= dt; if (hd.respawnT <= 0){ hd.present = true; hd.appearT = 0.8; } }
+      else if (hd.appearT > 0) hd.appearT = Math.max(0, hd.appearT - dt);
+    }
+
     // people
     for (const p of people) {
       p.phase += dt * 8 * (0.6 + p.speed/160) * (p.idle ? 0.12 + 0.88 * antsy : 1);   // at ease — until the block runs late
@@ -1590,7 +1674,7 @@
 
     drawSidewalk(time);
     drawRoad(time);
-    if (!NARROW){ drawBushes(time); drawMine(time); drawHouse(time); }  // bush field, mine + house
+    if (!NARROW){ drawBushes(time); drawMine(time); drawVault(time); drawHouse(time); }  // bush field, mine, vault + house
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
     drawStairs(time);          // boarding stairs from the corridor up to the ship
@@ -1909,7 +1993,10 @@
     const bt = b.blockTxcount!=null ? b.blockTxcount : (b.passengers.filter(p=>!p.miner).length + (b.hasPilot?1:0));   // +pilot once boarded
     ctx.textAlign = "center";
     const lblW = w * 0.88;                       // the hull is only so wide
-    ctx.fillStyle = "rgba(233,226,255,0.9)"; fitFont("BLOCK", 10, "800", lblW); ctx.fillText("BLOCK", cx, y+h*0.64);
+    // a launched ship declares HOW its block was won — staked quietly, or mined
+    const hdr = launching ? (b.algo === "pos" ? "STAKED" : b.algo && b.algo !== "unknown" ? "MINED" : "BLOCK") : "BLOCK";
+    ctx.fillStyle = launching && hdr !== "BLOCK" ? oc : "rgba(233,226,255,0.9)";
+    fitFont(hdr, 10, "800", lblW); ctx.fillText(hdr, cx, y+h*0.64);
     const hTxt = "#"+bh.toLocaleString();
     ctx.fillStyle = oc; fitFont(hTxt, 12, "800", lblW); ctx.fillText(hTxt, cx, y+h*0.72);
     ctx.fillStyle = "rgba(233,226,255,0.6)"; fitFont(bt+" tx", 9, "700", lblW); ctx.fillText(bt+" tx", cx, y+h*0.79);

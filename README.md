@@ -18,7 +18,13 @@ arrives** — the arrival is a picture of its traceability:
 
 The block's **coinbase** is an astronaut who climbs out of the mine carrying a gold
 coin (on a superblock he gets an armed escort that's the monthly budget payout), and
-the coin rides in the ship's cockpit. Figure size tracks transaction **vSize** (amounts
+the coin rides in the ship's cockpit. That's the PoW story. About half of Veil's
+blocks are staked, not mined, and staking is holding: at the **STAKING VAULT** in the
+lower bushes three hodlers sit on their coin stacks doing nothing, and when a stake
+wins a block one of them dissolves aboard in green stardust, the coin materialises at
+the ship's console, and any astronaut still walking from the mine turns back empty
+handed. The departing ship is stamped **MINED** or **STAKED** so you always know
+which way the block was won. Figure size tracks transaction **vSize** (amounts
 are hidden on a privacy chain, like TxStreet's Monero street); walking speed tracks fee
 priority.
 
