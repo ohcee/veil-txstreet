@@ -545,12 +545,15 @@
     // above them, so nobody crosses this ground except the RingCT who arrive on it.
     geo.ringSpots = [];
     { const bandL = geo.tRight + 14, bandR = geo.roadX1 - 12;
-      const xs = [bandL + (bandR - bandL) * 0.28, bandL + (bandR - bandL) * 0.72];
       const yT = geo.boardY + 34, yB = H * 0.86;
-      for (let row = 0; row < 6; row++) for (const x of xs)
-        geo.ringSpots.push({ x, y: yT + (yB - yT) * row / 5 });
       // the fogged field the portals sit in — arrivals happen somewhere under here
-      geo.ringField = { x0: bandL - 6, x1: bandR + 6, y0: yT - 16, y1: yB + 14 }; }
+      geo.ringField = { x0: bandL - 6, x1: bandR + 6, y0: yT - 16, y1: yB + 14 };
+      // all twelve pads huddle well inside the curtain's opaque core: at rest not a
+      // single ring shows through the cloth — the veil reads as solid dark ground
+      const cx = (bandL + bandR) / 2, cy = (yT + yB) / 2, h2 = (yB - yT) / 2;
+      const xs = [cx - (bandR - bandL) * 0.17, cx + (bandR - bandL) * 0.17];
+      for (let row = 0; row < 6; row++) for (const x of xs)
+        geo.ringSpots.push({ x, y: cy + h2 * 0.52 * (row / 2.5 - 1) }); }
     buildScenery();
   }
   window.addEventListener("resize", resize);
@@ -733,30 +736,16 @@
   // the twelve RingCT portals — a RingCT materialises on one of them, then walks
   // straight down and cuts across to the ship
   function drawRingPads(time){
-    if (NARROW || !geo.ringSpots) return;
-    const mag = "#d64bff";
-    { const xs = geo.ringSpots.map(q=>q.x), ys = geo.ringSpots.map(q=>q.y);
-      originSign((Math.min(...xs)+Math.max(...xs))/2, Math.min(...ys) - 22, "RINGCT PORTALS", mag); }
-    // DARK at rest. The portals are barely-there embers until a RingCT actually
-    // lands — then all twelve blaze at once and the veil lights up from beneath.
+    if (NARROW || !geo.ringSpots || !geo.ringField) return;
+    const mag = "#d64bff", f = geo.ringField;
+    originSign((f.x0 + f.x1) / 2, f.y0 - 6, "RINGCT PORTALS", mag);
+    // Only the dark pads live down here, and the cloth above swallows them whole:
+    // at rest the field is just black ground. When a RingCT lands the rings burn
+    // through the veil itself — that happens up in drawRingFog, above the cloth.
     for (let i = 0; i < geo.ringSpots.length; i++){
       const p = geo.ringSpots[i];
-      const idle = 0.04 + 0.03 * Math.sin(time*1.6 + i*0.55);        // a hint that something is there
-      const lit = ringFlash;
-      if (lit > 0){
-        const bg = ctx.createLinearGradient(p.x, p.y - 40, p.x, p.y);
-        bg.addColorStop(0, hexA(mag, 0)); bg.addColorStop(1, hexA(mag, 0.55 * lit));
-        ctx.fillStyle = bg;
-        ctx.beginPath(); ctx.moveTo(p.x - 3, p.y - 40); ctx.lineTo(p.x + 3, p.y - 40);
-        ctx.lineTo(p.x + 8, p.y); ctx.lineTo(p.x - 8, p.y); ctx.closePath(); ctx.fill();
-        const gg = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 17);
-        gg.addColorStop(0, hexA(mag, 0.55 * lit)); gg.addColorStop(1, hexA(mag, 0));
-        ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(p.x, p.y, 17, 7, 0, 0, 6.28); ctx.fill();
-      }
       ctx.fillStyle = "rgba(10,5,18,0.8)";
       ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3, 0, 0, 6.28); ctx.fill();
-      ctx.strokeStyle = hexA(mag, idle + 0.85 * lit); ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3, 0, 0, 6.28); ctx.stroke();
     }
   }
   // small named sign over an arrival point, in that origin's colour
@@ -785,28 +774,45 @@
     ctx.save();
     ctx.translate(cx2, cy2); ctx.scale((w2 + 10) / 100, (h2 + 12) / 100);
     const base = ctx.createRadialGradient(0, 0, 4, 0, 0, 100);
-    base.addColorStop(0, "rgba(16,8,28,0.92)");
-    base.addColorStop(0.8, "rgba(13,6,24,0.86)");
+    base.addColorStop(0, "rgba(16,8,28,0.95)");
+    base.addColorStop(0.8, "rgba(13,6,24,0.9)");
     base.addColorStop(1, "rgba(10,5,20,0)");
     ctx.fillStyle = base; ctx.beginPath(); ctx.arc(0, 0, 100, 0, 6.28); ctx.fill();
-    if (ringFlash > 0){
-      // the arrival: the whole field lights up THROUGH the veil — a bloom under cloth
-      const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 100);
-      glow.addColorStop(0, hexA("#d64bff", 0.42 * ringFlash));
-      glow.addColorStop(0.6, hexA("#9a2fd6", 0.22 * ringFlash));
-      glow.addColorStop(1, hexA("#9a2fd6", 0));
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 100, 0, 6.28); ctx.fill();
-    }
     ctx.restore();
     for (let i = 0; i < 4; i++){                                   // drifting folds in the cloth
       const px = cx2 + Math.sin(time * 0.35 + i * 1.9) * w2 * 0.55;
       const py = cy2 + Math.cos(time * 0.28 + i * 2.4) * h2 * 0.6;
       const pg = ctx.createRadialGradient(px, py, 1, px, py, 34);
-      pg.addColorStop(0, hexA("#b58aff", 0.05 + ringFlash * 0.18));
+      pg.addColorStop(0, hexA("#b58aff", 0.05));
       pg.addColorStop(1, hexA("#b58aff", 0));
       ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(px, py, 34, 20, 0, 0, 6.28); ctx.fill();
     }
+    if (ringFlash > 0 && geo.ringSpots){
+      // the arrival: the cloth STAYS black — the only light is the twelve rings
+      // themselves, burning through the weave. No field bloom, no silhouettes.
+      const mag = "#d64bff", lit = ringFlash;
+      for (let i = 0; i < geo.ringSpots.length; i++){
+        const p = geo.ringSpots[i];
+        const gg = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 15);
+        gg.addColorStop(0, hexA(mag, 0.38 * lit)); gg.addColorStop(1, hexA(mag, 0));
+        ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(p.x, p.y, 15, 6, 0, 0, 6.28); ctx.fill();
+        ctx.strokeStyle = hexA(mag, 0.9 * lit); ctx.lineWidth = 1.7;
+        ctx.shadowColor = mag; ctx.shadowBlur = 9 * lit;
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3, 0, 0, 6.28); ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+    }
     ctx.restore();
+  }
+  // how visible a walker is against the veil: 0 under the cloth (invisible), 1 in the
+  // open, with a short ramp just past the hem so they surface instead of popping in
+  function veilCover(x, y){
+    const f = geo.ringField;
+    if (NARROW || !f) return 1;
+    const dx = (x - (f.x0 + f.x1) / 2) / ((f.x1 - f.x0) / 2 + 8);
+    const dy = (y - (f.y0 + f.y1) / 2) / ((f.y1 - f.y0) / 2 + 10);
+    const r = Math.sqrt(dx * dx + dy * dy);          // 1 = the curtain's hem
+    return r <= 1 ? 0 : Math.min(1, (r - 1) * 7);
   }
   function drawGate(time){
     const gx = geo.gateX, gy = geo.gateY, w = 46, h = 16;
@@ -1912,8 +1918,12 @@
   //  base = human (public);  stealth = human/alien hybrid;  ringct = full alien
   //  (fully shielded).  The coinbase rides as the ship's pilot, drawn in drawBus.
   function drawPerson(p, time){
+    // under the veil nothing of them shows — not a wisp, not a silhouette. They only
+    // exist to the eye once they walk out past the hem.
+    const veil = veilCover(p.x, p.y);
+    if (veil <= 0) return;
     // trailing stardust wisps
-    for (const sd of p.shards){ ctx.globalAlpha = Math.max(0,sd.life)*0.7; ctx.fillStyle = p.type.glow;
+    for (const sd of p.shards){ ctx.globalAlpha = Math.max(0,sd.life)*0.7*veil; ctx.fillStyle = p.type.glow;
       ctx.save(); ctx.translate(sd.x,sd.y); ctx.rotate(sd.life*6); ctx.fillRect(-sd.r/2,-sd.r/2,sd.r,sd.r); ctx.restore(); }
     ctx.globalAlpha = 1;
     if (p.state === "boarded" || p.state === "riding" || p.state === "gone") return;
@@ -1954,7 +1964,7 @@
     ctx.save();
     // RingCT is the fully shielded tier, so it cloaks down to a barely-there ghost once
     // it lands — you can tell someone is walking, not who. cloak ramps 0→1 after arrival.
-    const ghost = p.type.key === "ringct" ? 1 - 0.76 * p.cloak : 1;
+    const ghost = (p.type.key === "ringct" ? 1 - 0.76 * p.cloak : 1) * veil;
     ctx.globalAlpha = (tp > 0 ? Math.min(1, (1 - tp) * 2.2) : 1) * ghost;   // fade in as it lands
     if (p.miner) drawAstronaut(x, y, s, step, time, p);
     // shapes: base = human. Stealth wears the cooler full-alien body, RingCT the hybrid
