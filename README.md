@@ -7,22 +7,32 @@ network finds a block, the BLOCK FOUND sign flickers on and the ship lifts off w
 everyone the block accepted anyone it turned away steps off, sits out a few seconds
 by the stairs, and catches the next ship.
 
-How private a transaction is decides what its Veilian looks like **and how it
-arrives** — the arrival is a picture of its traceability:
+Two independent things decide what you see, because they are two independent facts
+about a transaction. **What it writes** decides the being. **What it spends** decides
+the door it comes through, since that is what its source actually is.
 
-The being is decided by what a transaction **writes**. How it **arrives** is decided
-by what it **spends**, because that is what its source actually is:
+The being, from its outputs:
 
-| Type | Being | Arrival |
-|---|---|---|
-| **Basecoin** (grey) | human | walks out the front door of **The Transparent House** origin in plain sight |
-| **Stealth** (cyan) | full alien | surfaces through a ground portal the amounts and the recipient are hidden, though the outputs it spends are still named on chain |
-| **RingCT that spends a ring** (magenta) | hybrid, cloaked to a faint ghost | arrives under **the veil** a dark curtain hiding twelve portals (one per ring in the signature). The field only lights up *through* the cloth when a transaction lands, every portal flashing at once, and the Veilian walks out from under the sign no telling which door |
-| **RingCT that only writes hidden outputs** (magenta) | the same ghost | leaves **the house** like anything else with a public origin. It builds no ring, so its source is a named outpoint you can follow. It hid what it wrote, not where its money came from |
+| Writes | Being |
+|---|---|
+| **Basecoin** (grey) | a human |
+| **Stealth** (cyan) | a full alien |
+| **RingCT** (magenta) | a hybrid, cloaked down to a faint ghost |
 
-That last row is the honest part most explorers skip: a shielded looking transaction
-is not automatically a private one, and the scene refuses to imply a hidden source
-that the chain does not actually hide.
+The arrival, from the outputs it actually consumed (resolved on the node, not guessed
+from the outputs):
+
+| Spends | Arrival |
+|---|---|
+| a plain output | walks out the front door of **The Transparent House**: outpoint and value both public |
+| a blinded (CT) output | surfaces through the **ground portal**: you can name the outpoint it spent, but not its value |
+| a **ring** (an anon input) | arrives under **the veil**, a dark curtain hiding twelve portals, one per ring member. The field only lights up *through* the cloth when a ring is actually spent, every portal flashing at once, and the Veilian walks out from under the sign no telling which door |
+
+Splitting these two is the honest part most explorers skip. A shielded looking
+transaction is not automatically a private one: a stealth to RingCT send writes
+nothing but hidden outputs and still spends coin anyone can point at, so it comes up
+through the portal rather than out of the veil. Only a real ring signature earns the
+veil, and only a real ring lights it.
 
 The block's **coinbase** never walks the street. At the **COINBASE MINE** a crew of
 three astronauts swings at the rock face without pause, because mining is grinding

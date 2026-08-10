@@ -192,6 +192,42 @@ function classify(tx) {
 // ring at all, so classify() alone (which reads outputs) must not be read as
 // "this transaction hid its source". Ring size is per input, so check every vin.
 function spendsRing(tx) { return (tx.vin || []).some(v => v.type === "anon"); }
+// What a transaction SPENT, which is the only truthful basis for showing where it
+// came from. Output type will not do: a stealth to RingCT send writes hidden
+// outputs while spending blinded ones, and calling that a transparent origin
+// (or a ring) is a lie in either direction.
+//   ring    — an anon input: the source is one of a ring and cannot be pinned
+//   stealth — a blinded/CT prevout: you can name the outpoint, not its value
+//   base    — a plain prevout: outpoint and value both public
+const KIND_CACHE = new Map();                    // "txid:n" -> kind
+function kindOfVout(v){
+  const t = String(v.type || (v.scriptPubKey || {}).type || "").toLowerCase();
+  if (t.includes("anon") || t.includes("ringct")) return "ring";
+  if (t.includes("blind") || t === "ct") return "stealth";
+  return "base";
+}
+let kindLookups = 0;                             // budget, reset each poll
+async function sourceKind(tx){
+  if (spendsRing(tx)) return "ring";
+  const vin = (tx.vin || []).find(v => v.txid);
+  if (!vin) return null;                         // coinbase, coinstake, zerocoinspend
+  const n = vin["vout.n"] != null ? vin["vout.n"] : vin.vout;
+  const key = vin.txid + ":" + n;
+  if (KIND_CACHE.has(key)) return KIND_CACHE.get(key);
+  if (kindLookups >= 12) return null;            // don't hammer the node on a big block
+  kindLookups++;
+  try {
+    const prev = await rpc("getrawtransaction", [vin.txid, true]);
+    let mine = null;
+    for (const v of (prev.vout || [])){
+      const idx = voutIndex(v), k = kindOfVout(v);
+      const ck = vin.txid + ":" + idx;
+      if (KIND_CACHE.size < 5000) KIND_CACHE.set(ck, k);
+      if (idx === n) mine = k;
+    }
+    return mine;
+  } catch (_) { return null; }
+}
 function ringSizes(tx) {
   return (tx.vin || []).filter(v => v.type === "anon")
                        .map(v => v.ring_size).filter(n => n != null);
@@ -233,9 +269,9 @@ function pumpTx() {
     }
     inflight++;
     rpc("getrawtransaction", [txid, true])
-      .then(tx => { const t = classify(tx), ri = spendsRing(tx);
-                    memNow.set(txid, { txid, vsize, fee, type: t, time, ringIn: ri });
-                    push({ kind: "tx", txid, vsize, fee, type: t, time, ringIn: ri }); })
+      .then(async tx => { const t = classify(tx), ri = spendsRing(tx), src = await sourceKind(tx);
+                    memNow.set(txid, { txid, vsize, fee, type: t, time, ringIn: ri, src });
+                    push({ kind: "tx", txid, vsize, fee, type: t, time, ringIn: ri, src }); })
       .catch(() => { const t = heuristicType(vsize); memNow.set(txid, { txid, vsize, fee, type: t, time });
                      push({ kind: "tx", txid, vsize, fee, type: t, time }); })
       .finally(() => { inflight--; pumpTx(); });
@@ -265,6 +301,7 @@ async function poll() {
   // lastHeight would each push the new block, and every block prints twice
   if (polling) return;
   polling = true;
+  kindLookups = 0;                       // fresh prevout-lookup budget for this pass
   try {
     if (!rpcPortLocked && !(await detectPort())) {
       stats = { ...stats, mode: "offline", updated: Date.now() };
@@ -335,14 +372,16 @@ async function poll() {
           // should walk the street — the astronaut represents them.
           if (full) harvestSnitch(blk);          // note any transparent addresses this block exposed
           const rewardTxs = detectAlgo(blk) === "pos" ? 2 : 1;
-          txs.forEach((tx, idx) => {
-            const tid = full ? (tx.txid || tx) : tx;
+          for (let idx = 0; idx < txs.length; idx++) {
+            const tx = txs[idx], tid = full ? (tx.txid || tx) : tx;
             if (idx >= rewardTxs && !known.has(tid)) {
-              if (full) push({ kind: "tx", txid: tid, vsize: tx.vsize || tx.size || 500, fee: 0, type: classify(tx), ringIn: spendsRing(tx), time: blk.time || Date.now() / 1000 });
+              if (full) push({ kind: "tx", txid: tid, vsize: tx.vsize || tx.size || 500, fee: 0,
+                               type: classify(tx), ringIn: spendsRing(tx), src: await sourceKind(tx),
+                               time: blk.time || Date.now() / 1000 });
               else push({ kind: "tx", txid: tid, vsize: 800, fee: 0, type: heuristicType(800), time: blk.time || Date.now() / 1000 });
             }
             known.delete(tid);
-          });
+          }
           for (const tid of txids) rememberTx(tid, h, hash);
           const nowS = Date.now() / 1000;
           if (lastArrival){ blockGaps.push(Math.round(nowS - lastArrival)); if (blockGaps.length > 60) blockGaps.shift(); }

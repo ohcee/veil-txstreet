@@ -1248,17 +1248,17 @@
     //   stealth     — surfaces through the ground portal: the amounts and the
     //                 recipient are hidden, though the outputs it spends are named
     //   ringct spend— comes from under the veil: the ring makes the source unknowable
-    // A transaction that only CREATES RingCT outputs spends ordinary named outpoints,
-    // so its source is public and it must not come from the veil. It hid what it
-    // wrote, not where its money came from, and it leaves the house like anything
-    // else with a traceable origin. Only tx.ringIn === true earns the veil; when the
-    // node never told us (a rare burst where even the type is a size guess) we do not
-    // claim a hidden source either.
+    // The being says what it wrote; the door says what it spent. tx.src is resolved
+    // from the actual outputs consumed, so a transaction cannot claim an origin it
+    // does not have: a stealth to RingCT send spends blinded coin and comes up
+    // through the portal, not out of the transparent house, even though everything
+    // it writes is hidden. Falls back to the output type only when the node could
+    // not tell us, and even then a RingCT tx with no known ring never gets the veil.
     const fresh = d.atY == null, key = type.key;
-    const ringSpend = key === "ringct" && tx.ringIn === true;
-    const viaHouse = fresh && (key === "base" || (key === "ringct" && !ringSpend));
-    const viaGate  = fresh && key === "stealth";
-    const viaDrop  = fresh && ringSpend;
+    const src = tx.src || (tx.ringIn === true ? "ring" : null);
+    const viaHouse = fresh && (src ? src === "base" : key === "base" || key === "ringct");
+    const viaGate  = fresh && (src ? src === "stealth" : key === "stealth");
+    const viaDrop  = fresh && src === "ring";
     const drop = viaDrop ? ringSpot() : null;
     // a mid-street spawn (sim seeds, restarts) must sit in open ground for its y —
     // the stem inside the corridor, the lane below the merge — never in the bushes
@@ -1337,7 +1337,7 @@
     // ringIn: does it actually SPEND RingCT (a ring signature, an anonymity set),
     // or does it only create hidden outputs? Undefined when the node never told us.
     return { id: txSeq, hash: d.hash || rndHex(64), type: typeKey, typeName: TX_TYPES[typeKey].name,
-      ringIn: d.ringIn, vsize: d.vsize || 500, fee: d.fee || 0, addr, t: Date.now() };
+      ringIn: d.ringIn, src: d.src, vsize: d.vsize || 500, fee: d.fee || 0, addr, t: Date.now() };
   }
   const txListEl = document.getElementById("txList");
   const searchEl = document.getElementById("search");
@@ -2748,7 +2748,7 @@
     if (mempoolSet.has(ev.txid)) return;
     mempoolSet.add(ev.txid);
     const walking = people.reduce((a,p)=>a+(p.state==="walking"?1:0),0);
-    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid, ringIn: ev.ringIn };
+    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid, ringIn: ev.ringIn, src: ev.src };
     if (walking < 100) addPerson(d);          // animate it walking the street
     else addTxToFeed(makeTxFromData(d));       // burst overflow: list only
   }
@@ -2779,7 +2779,7 @@
       const row = recentTx.find(t => t.hash === m.txid);
       const walking = people.some(p => p.tx && p.tx.hash === m.txid);
       if (row && !walking) addPerson({ reuseTx: row });                  // row survived, walker didn't
-      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid, ringIn: m.ringIn });
+      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid, ringIn: m.ringIn, src: m.src });
     }
     // and the other direction: still shown as pending here, gone from the node
     // there — evicted, or confirmed in a moment we missed. These used to linger
