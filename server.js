@@ -206,11 +206,22 @@ function kindOfVout(v){
   if (t.includes("blind") || t === "ct") return "stealth";
   return "base";
 }
+// a zerocoin spend and a coinbase both carry a NULL outpoint (all-zero txid, index
+// 0xffffffff). There is no previous output to look up, and asking for one is a
+// guaranteed RPC failure, so recognise them before spending a lookup on it.
+const NULL_TXID = /^0{64}$/;
+function realPrevout(v){
+  return v.txid && !NULL_TXID.test(v.txid) &&
+         (v["vout.n"] != null ? v["vout.n"] : v.vout) !== 0xffffffff;
+}
 let kindLookups = 0;                             // budget, reset each poll
 async function sourceKind(tx){
   if (spendsRing(tx)) return "ring";
-  const vin = (tx.vin || []).find(v => v.txid);
-  if (!vin) return null;                         // coinbase, coinstake, zerocoinspend
+  // legacy zerocoin: the coin comes out of the accumulator, so the denomination is
+  // public but the mint it came from is not. No outpoint exists to trace.
+  if ((tx.vin || []).some(v => v.type === "zerocoinspend")) return "zerocoin";
+  const vin = (tx.vin || []).find(realPrevout);
+  if (!vin) return null;                         // coinbase, coinstake, nothing to trace
   const n = vin["vout.n"] != null ? vin["vout.n"] : vin.vout;
   const key = vin.txid + ":" + n;
   if (KIND_CACHE.has(key)) return KIND_CACHE.get(key);

@@ -1254,6 +1254,9 @@
     // through the portal, not out of the transparent house, even though everything
     // it writes is hidden. Falls back to the output type only when the node could
     // not tell us, and even then a RingCT tx with no known ring never gets the veil.
+    // A legacy zerocoin spend belongs to none of the three doors: it has no outpoint
+    // at all, the coin steps out of the accumulator, so it simply materialises. That
+    // beam is the honest picture of a source with nothing to point at.
     const fresh = d.atY == null, key = type.key;
     const src = tx.src || (tx.ringIn === true ? "ring" : null);
     const viaHouse = fresh && (src ? src === "base" : key === "base" || key === "ringct");

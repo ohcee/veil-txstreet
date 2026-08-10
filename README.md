@@ -27,6 +27,7 @@ from the outputs):
 | a plain output | walks out the front door of **The Transparent House**: outpoint and value both public |
 | a blinded (CT) output | surfaces through the **ground portal**: you can name the outpoint it spent, but not its value |
 | a **ring** (an anon input) | arrives under **the veil**, a dark curtain hiding twelve portals, one per ring member. The field only lights up *through* the cloth when a ring is actually spent, every portal flashing at once, and the Veilian walks out from under the sign no telling which door |
+| a **zerocoin** mint (legacy) | simply materialises in the street. A zerocoin spend carries a null outpoint: the denomination is public, the mint it came from is not, and there is no previous output anywhere to point at |
 
 Splitting these two is the honest part most explorers skip. A shielded looking
 transaction is not automatically a private one: a stealth to RingCT send writes
