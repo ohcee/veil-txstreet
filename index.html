@@ -347,7 +347,7 @@
     <div class="stats" id="stats">
       <div class="stat"><div class="stat-label">Block Height</div><div class="stat-value" id="s-height">—</div></div>
       <div class="stat pos"><div class="stat-label">Mempool</div><div class="stat-value" id="s-mem">—</div></div>
-      <div class="stat mag"><div class="stat-label">Privacy Ratio</div><div class="stat-value" id="s-priv">—</div></div>
+      <div class="stat mag" title="Share of transactions that wrote at least one shielded output (CT or RingCT). Two honest caveats: a zerocoin spend publishes the denominations it spent, so the amount it moved is public even when its outputs are blinded; and a transaction counted here may also have written a plain output alongside the hidden ones."><div class="stat-label">Privacy Ratio</div><div class="stat-value" id="s-priv">—</div></div>
       <div class="stat pos" title="Median transaction fee, estimated in USD from the live VEIL price"><div class="stat-label">Median Fee</div><div class="stat-value" id="s-price">—</div></div>
     </div>
   </nav>
@@ -1340,7 +1340,8 @@
     // ringIn: does it actually SPEND RingCT (a ring signature, an anonymity set),
     // or does it only create hidden outputs? Undefined when the node never told us.
     return { id: txSeq, hash: d.hash || rndHex(64), type: typeKey, typeName: TX_TYPES[typeKey].name,
-      ringIn: d.ringIn, src: d.src, vsize: d.vsize || 500, fee: d.fee || 0, addr, t: Date.now() };
+      ringIn: d.ringIn, src: d.src, mixed: d.mixed,
+      vsize: d.vsize || 500, fee: d.fee || 0, addr, t: Date.now() };
   }
   const txListEl = document.getElementById("txList");
   const searchEl = document.getElementById("search");
@@ -2217,6 +2218,17 @@
               p.type.key === "base" ? "human" : p.type.key === "stealth" ? "alien" : "hybrid");
     ctx.restore();
 
+    // A shielded walker that also wrote a plain output is carrying something anyone
+    // can read, so it carries it visibly: a gold coin at its side. The creature shows
+    // the most private thing it wrote, and this is the part that leaked.
+    if (p.tx.mixed && !p.miner && tp <= 0){
+      const mx = x + 8*s, my = y - 5*s + Math.sin(time*3 + p.sway)*1.2*s;
+      ctx.globalAlpha = veil;
+      ctx.fillStyle = "#dfa62a"; ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 6*s;
+      ctx.beginPath(); ctx.arc(mx, my, 3.2*s, 0, 6.28); ctx.fill(); ctx.shadowBlur = 0;
+      ctx.fillStyle = "#ffcf5a"; ctx.beginPath(); ctx.arc(mx, my, 2.3*s, 0, 6.28); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     // size glyph for large tx
     if (s > 1.35 && !p.miner && tp <= 0){ ctx.fillStyle = hexA(gl, 0.9 * ghost); ctx.textAlign = "center";
       ctx.font = "700 8px ui-monospace, monospace"; ctx.fillText(fmtSize(p.tx.vsize), x, y-16*s); }
@@ -2751,7 +2763,7 @@
     if (mempoolSet.has(ev.txid)) return;
     mempoolSet.add(ev.txid);
     const walking = people.reduce((a,p)=>a+(p.state==="walking"?1:0),0);
-    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid, ringIn: ev.ringIn, src: ev.src };
+    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid, ringIn: ev.ringIn, src: ev.src, mixed: ev.mixed };
     if (walking < 100) addPerson(d);          // animate it walking the street
     else addTxToFeed(makeTxFromData(d));       // burst overflow: list only
   }
@@ -2782,7 +2794,7 @@
       const row = recentTx.find(t => t.hash === m.txid);
       const walking = people.some(p => p.tx && p.tx.hash === m.txid);
       if (row && !walking) addPerson({ reuseTx: row });                  // row survived, walker didn't
-      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid, ringIn: m.ringIn, src: m.src });
+      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid, ringIn: m.ringIn, src: m.src, mixed: m.mixed });
     }
     // and the other direction: still shown as pending here, gone from the node
     // there — evicted, or confirmed in a moment we missed. These used to linger
@@ -2991,6 +3003,26 @@
     // builds a ring signature, and only then is there an anonymity set. A stealth
     // to RingCT send makes hidden outputs from ordinary inputs with no ring at
     // all, so badging it plain RINGCT overstates what it hid.
+    // A zerocoin spend hides which mint it came from but prints the denominations it
+    // spent in the clear, so the amount it moved is public even when every output is
+    // blinded. That is worth saying out loud on a page about privacy.
+    const zcVins = d.vin.filter(v => v.kind === "zerocoinspend");
+    const zcTotal = zcVins.reduce((a, v) => a + (parseFloat(v.denomination) || 0), 0);
+    const zcNote = zcVins.length
+      ? `<div style="margin:10px 0 0;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.5;
+          background:${hexA("#ffcf5a",0.07)};border:1px solid ${hexA("#ffcf5a",0.25)};color:var(--text-dim)">
+          <b>spends zerocoin.</b> ${esc(String(zcVins.length))} mint${zcVins.length > 1 ? "s" : ""} of public denomination${
+          zcTotal > 0 ? `, <b>${esc(zcTotal.toLocaleString(undefined,{maximumFractionDigits:8}))} VEIL disclosed</b>` : ""}.
+          Which mints they came from cannot be traced, but the denominations are printed in the clear,
+          so the amount this moved is public even if its outputs are hidden.</div>`
+      : "";
+    const mixNote = d.vout.some(v => v.hidden) && d.vout.some(v => !v.hidden && v.kind !== "data")
+      ? `<div style="margin:10px 0 0;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.5;
+          background:${hexA("#8a93b0",0.09)};border:1px solid ${hexA("#8a93b0",0.3)};color:var(--text-dim)">
+          <b>writes both hidden and public outputs.</b> Some of what this transaction paid out is
+          shielded and some of it is readable by anyone, usually change. On the street its Veilian
+          carries a gold coin to show the part that did not stay private.</div>`
+      : "";
     const ringVins = d.vin.filter(v => v.kind === "anon");
     const sizes = [...new Set(ringVins.map(v => v.ringSize).filter(n => n != null))];
     const ringNote = d.type !== "ringct" ? { suffix: "", title: "", line: "" }
@@ -3050,8 +3082,9 @@
         <div style="margin:10px 0 0">${status}</div>
         ${ringNote.line ? `<div style="margin:10px 0 0;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.5;
           background:${hexA(tt.color,0.07)};border:1px solid ${hexA(tt.color,0.25)};color:var(--text-dim)">${ringNote.line}</div>` : ""}
+        ${zcNote}${mixNote}
         <div class="xp-grid">
-          <div class="xp-cell"><b>visible out</b><span>${d.valueOut > 0 ? esc(d.valueOut.toLocaleString(undefined,{maximumFractionDigits:8})) + " VEIL" + usd : (d.type === "ringct" ? "hidden" : "—")}</span></div>
+          <div class="xp-cell"><b>visible out</b><span>${d.valueOut > 0 ? esc(d.valueOut.toLocaleString(undefined,{maximumFractionDigits:8})) + " VEIL" + usd : (d.vout.some(v => v.hidden) ? "hidden" : "—")}</span></div>
           <div class="xp-cell"><b>fee</b><span>${d.ctFee != null ? esc(String(d.ctFee)) + " VEIL" + (stat.usd > 0 ? " · " + fmtUsd(d.ctFee * stat.usd) : "") : "—"}</span></div>
           <div class="xp-cell"><b>fee rate</b><span>${d.ctFee != null && d.vsize ? (d.ctFee / (d.vsize/1000)).toFixed(5) + " VEIL/kB" : "—"}</span></div>
           <div class="xp-cell"><b>vsize</b><span>${esc(fmtSize(d.vsize))}</span></div>

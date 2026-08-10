@@ -192,6 +192,20 @@ function classify(tx) {
 // ring at all, so classify() alone (which reads outputs) must not be read as
 // "this transaction hid its source". Ring size is per input, so check every vin.
 function spendsRing(tx) { return (tx.vin || []).some(v => v.type === "anon"); }
+// A transaction can write a shielded output AND a plain one in the same breath,
+// usually change. The being can only be one creature and it shows the most private
+// output, so without this flag a ghost would silently be carrying a public payment.
+// (The "data" output is Veil's fee marker, not a payment.)
+function writesMixed(tx) {
+  let shielded = false, plain = false;
+  for (const v of (tx.vout || [])) {
+    const t = String(v.type || (v.scriptPubKey || {}).type || "").toLowerCase();
+    if (t === "data") continue;
+    if (t.includes("anon") || t.includes("ringct") || t.includes("blind") || t === "ct") shielded = true;
+    else plain = true;
+  }
+  return shielded && plain;
+}
 // What a transaction SPENT, which is the only truthful basis for showing where it
 // came from. Output type will not do: a stealth to RingCT send writes hidden
 // outputs while spending blinded ones, and calling that a transparent origin
@@ -280,9 +294,9 @@ function pumpTx() {
     }
     inflight++;
     rpc("getrawtransaction", [txid, true])
-      .then(async tx => { const t = classify(tx), ri = spendsRing(tx), src = await sourceKind(tx);
-                    memNow.set(txid, { txid, vsize, fee, type: t, time, ringIn: ri, src });
-                    push({ kind: "tx", txid, vsize, fee, type: t, time, ringIn: ri, src }); })
+      .then(async tx => { const t = classify(tx), ri = spendsRing(tx), src = await sourceKind(tx), mx = writesMixed(tx);
+                    memNow.set(txid, { txid, vsize, fee, type: t, time, ringIn: ri, src, mixed: mx });
+                    push({ kind: "tx", txid, vsize, fee, type: t, time, ringIn: ri, src, mixed: mx }); })
       .catch(() => { const t = heuristicType(vsize); memNow.set(txid, { txid, vsize, fee, type: t, time });
                      push({ kind: "tx", txid, vsize, fee, type: t, time }); })
       .finally(() => { inflight--; pumpTx(); });
@@ -388,7 +402,7 @@ async function poll() {
             if (idx >= rewardTxs && !known.has(tid)) {
               if (full) push({ kind: "tx", txid: tid, vsize: tx.vsize || tx.size || 500, fee: 0,
                                type: classify(tx), ringIn: spendsRing(tx), src: await sourceKind(tx),
-                               time: blk.time || Date.now() / 1000 });
+                               mixed: writesMixed(tx), time: blk.time || Date.now() / 1000 });
               else push({ kind: "tx", txid: tid, vsize: 800, fee: 0, type: heuristicType(800), time: blk.time || Date.now() / 1000 });
             }
             known.delete(tid);
@@ -634,8 +648,17 @@ async function backfillPass(){
 // ---------------------------------------------------------------------------
 const HEX64 = /^[0-9a-fA-F]{64}$/;
 const blockCache = new Map();                   // hash -> payload (LRU-ish, small)
+// Veil's own v.type is the authority on what an output IS. A blinded (CT) output
+// still carries an ordinary scriptPubKey of type pubkeyhash, so reading the script
+// first reported every CT output as a plain transparent one, which is the most
+// common output on the chain. Ask Veil first, and only fall back to the script for
+// transparent outputs, where pubkeyhash / nonstandard is the more useful answer.
 function voutKind(v){
-  return (v.scriptPubKey || {}).type || v.type || "unknown";
+  const t = String(v.type || "").toLowerCase();
+  if (t.includes("anon") || t.includes("ringct")) return "ringct";
+  if (t.includes("blind") || t === "ct") return "blind";
+  if (t === "zerocoinmint" || t === "data") return t;
+  return (v.scriptPubKey || {}).type || t || "unknown";
 }
 function voutIndex(v){ const n = v["vout.n"]; return n != null ? n : v.n; }   // Veil names it "vout.n"
 function summarizeTx(tx, idx, isPos){
