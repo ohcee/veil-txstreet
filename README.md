@@ -128,6 +128,15 @@ box** up top jumps straight to any block height, block hash, txid, or address. P
 are deep-linkable (`#/block/<height>`, `#/tx/<txid>`, `#/address/<addr>`), with the
 [Veil explorer](https://explorer.veil-project.com/main) one click away in the footer.
 
+On RingCT the pages keep one distinction most explorers blur: **creating** hidden
+outputs is not **spending** them. Only a spend builds a ring signature, so only a
+spend has an anonymity set. A transaction that merely writes RingCT outputs (a
+stealth to RingCT send, say) is marked `RINGCT OUT` and says plainly that it hid its
+amounts, not its source. Where a real ring exists the page shows its **ring size per
+input**, which is public on chain, chosen by the sending wallet, and the single most
+meaningful privacy number in the transaction. Both 5 and 11 are in live use on
+mainnet; consensus allows 3 to 32.
+
 The algorithm panel also carries a small **network health** readout: peer count (in and
 out), the `seed.veil-info.org` seeder's status, and two sparklines tracking recent block
 arrivals and mempool depth.

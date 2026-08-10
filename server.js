@@ -186,6 +186,16 @@ function classify(tx) {
   }
   return ring ? "ringct" : ct ? "stealth" : "base";
 }
+// Creating RingCT outputs and SPENDING RingCT are different things, and only the
+// spending side builds a ring signature — that is where the anonymity set lives.
+// A stealth to RingCT send makes hidden outputs with ordinary inputs and has no
+// ring at all, so classify() alone (which reads outputs) must not be read as
+// "this transaction hid its source". Ring size is per input, so check every vin.
+function spendsRing(tx) { return (tx.vin || []).some(v => v.type === "anon"); }
+function ringSizes(tx) {
+  return (tx.vin || []).filter(v => v.type === "anon")
+                       .map(v => v.ring_size).filter(n => n != null);
+}
 function heuristicType(vsize) { return vsize > 2200 ? "ringct" : vsize > 900 ? "stealth" : "base"; }
 
 // Which of Veil's algorithms mined a block: pos | progpow | randomx | sha256d | unknown.
@@ -223,8 +233,9 @@ function pumpTx() {
     }
     inflight++;
     rpc("getrawtransaction", [txid, true])
-      .then(tx => { const t = classify(tx); memNow.set(txid, { txid, vsize, fee, type: t, time });
-                    push({ kind: "tx", txid, vsize, fee, type: t, time }); })
+      .then(tx => { const t = classify(tx), ri = spendsRing(tx);
+                    memNow.set(txid, { txid, vsize, fee, type: t, time, ringIn: ri });
+                    push({ kind: "tx", txid, vsize, fee, type: t, time, ringIn: ri }); })
       .catch(() => { const t = heuristicType(vsize); memNow.set(txid, { txid, vsize, fee, type: t, time });
                      push({ kind: "tx", txid, vsize, fee, type: t, time }); })
       .finally(() => { inflight--; pumpTx(); });
@@ -327,7 +338,7 @@ async function poll() {
           txs.forEach((tx, idx) => {
             const tid = full ? (tx.txid || tx) : tx;
             if (idx >= rewardTxs && !known.has(tid)) {
-              if (full) push({ kind: "tx", txid: tid, vsize: tx.vsize || tx.size || 500, fee: 0, type: classify(tx), time: blk.time || Date.now() / 1000 });
+              if (full) push({ kind: "tx", txid: tid, vsize: tx.vsize || tx.size || 500, fee: 0, type: classify(tx), ringIn: spendsRing(tx), time: blk.time || Date.now() / 1000 });
               else push({ kind: "tx", txid: tid, vsize: 800, fee: 0, type: heuristicType(800), time: blk.time || Date.now() / 1000 });
             }
             known.delete(tid);
@@ -585,14 +596,14 @@ function summarizeTx(tx, idx, isPos){
     if (k === "ringct" || k === "ct" || k === "blind") nHidden++;
     if (k === "data" && v.ct_fee != null) ctFee = +v.ct_fee;
   }
-  const vin0 = (tx.vin || [])[0] || {};
   const kind = idx === 0 ? "coinbase"
              : (isPos && idx === 1) ? "coinstake"
              : "tx";
+  // ring size is per input, so ask every vin, not just the first one
   return { txid: tx.txid, type: classify(tx), vsize: tx.vsize || tx.size || 0,
            out: +out.toFixed(8), hidden: nHidden > 0, ctFee,
            nvin: (tx.vin || []).length, nvout: (tx.vout || []).length, kind,
-           anon: vin0.type === "anon" };
+           anon: spendsRing(tx), rings: ringSizes(tx) };
 }
 async function apiBlock(id){
   let hash = null;

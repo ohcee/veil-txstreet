@@ -1325,8 +1325,10 @@
     txSeq++;
     const typeKey = (d.type in TX_TYPES) ? d.type : "base";
     const addr = d.addr != null ? d.addr : fauxAddr(typeKey);
+    // ringIn: does it actually SPEND RingCT (a ring signature, an anonymity set),
+    // or does it only create hidden outputs? Undefined when the node never told us.
     return { id: txSeq, hash: d.hash || rndHex(64), type: typeKey, typeName: TX_TYPES[typeKey].name,
-      vsize: d.vsize || 500, fee: d.fee || 0, addr, t: Date.now() };
+      ringIn: d.ringIn, vsize: d.vsize || 500, fee: d.fee || 0, addr, t: Date.now() };
   }
   const txListEl = document.getElementById("txList");
   const searchEl = document.getElementById("search");
@@ -1367,7 +1369,10 @@
       `<div class="tx-ico" style="background:${hexA(t.color,0.16)};color:${t.color}">${t.icon}</div>
        <div class="tx-body">
          <div class="tx-hash">0x${short(tx.hash)}</div>
-         <div class="tx-meta">${tx.addr ? short(tx.addr,6,4)+" · " : "shielded · "}<span class="tx-type-badge" style="background:${hexA(t.color,0.2)};color:${t.color}">${t.name}</span></div>
+         <div class="tx-meta">${tx.addr ? short(tx.addr,6,4)+" · " : "shielded · "}<span class="tx-type-badge" style="background:${hexA(t.color,0.2)};color:${t.color}" title="${
+           tx.type === "ringct" && tx.ringIn === false ? "creates RingCT outputs but spends none, so no ring signature" :
+           tx.type === "ringct" && tx.ringIn ? "spends RingCT: the source hides in a ring" : ""
+         }">${t.name}${tx.type === "ringct" && tx.ringIn === false ? " OUT" : ""}</span></div>
        </div>
        <div class="tx-amt"><div class="tx-amt-val">${fmtSize(tx.vsize)}</div><div class="tx-amt-usd">${fmtFee(tx.fee)}</div></div>
        <div class="tx-ext">↗</div>`;
@@ -2734,7 +2739,7 @@
     if (mempoolSet.has(ev.txid)) return;
     mempoolSet.add(ev.txid);
     const walking = people.reduce((a,p)=>a+(p.state==="walking"?1:0),0);
-    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid };
+    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid, ringIn: ev.ringIn };
     if (walking < 100) addPerson(d);          // animate it walking the street
     else addTxToFeed(makeTxFromData(d));       // burst overflow: list only
   }
@@ -2765,7 +2770,7 @@
       const row = recentTx.find(t => t.hash === m.txid);
       const walking = people.some(p => p.tx && p.tx.hash === m.txid);
       if (row && !walking) addPerson({ reuseTx: row });                  // row survived, walker didn't
-      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid });
+      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid, ringIn: m.ringIn });
     }
     // and the other direction: still shown as pending here, gone from the node
     // there — evicted, or confirmed in a moment we missed. These used to linger
@@ -2970,6 +2975,19 @@
     if (!d || !d.ok) return xpFail("transaction", (d && d.error) || "the node didn't answer");
     const tt = TX_TYPES[d.type] || TX_TYPES.base;
     const c = d.context || {};
+    // Creating RingCT outputs is not the same as spending RingCT. Only a spend
+    // builds a ring signature, and only then is there an anonymity set. A stealth
+    // to RingCT send makes hidden outputs from ordinary inputs with no ring at
+    // all, so badging it plain RINGCT overstates what it hid.
+    const ringVins = d.vin.filter(v => v.kind === "anon");
+    const sizes = [...new Set(ringVins.map(v => v.ringSize).filter(n => n != null))];
+    const ringNote = d.type !== "ringct" ? { suffix: "", title: "", line: "" }
+      : ringVins.length
+        ? { suffix: " IN", title: "spends RingCT: every input hides in a ring",
+            line: `<b>spends with a ring.</b> ${ringVins.length} RingCT input${ringVins.length > 1 ? "s" : ""}${
+                   sizes.length ? `, ring size ${esc(sizes.join(" and "))}` : ""}, so the source hides among the decoys. Ring size is chosen by the sending wallet and is public on chain.` }
+        : { suffix: " OUT", title: "creates RingCT outputs but spends none, so there is no ring",
+            line: `<b>creates hidden outputs, spends none.</b> No input builds a ring signature here, so this transaction has no anonymity set of its own. What it hides is the amounts and destinations it wrote, not where its money came from.` };
     const status = c.pending
       ? `<i class="xp-chip" style="background:${hexA("#ffcf5a",0.18)};color:#ffcf5a">IN MEMPOOL</i>`
       : (() => { const ca = algoOf(c.algo);
@@ -2984,7 +3002,15 @@
       if (v.kind === "anon"){
         const ring = (v.ring || []).map(m =>
           `<div style="cursor:pointer;color:var(--text-faint)" data-gotx="${esc(m.txid)}" title="a ring member output — one of these is the real source">↳ ${esc(short(m.txid, 10, 8))}<span style="opacity:0.6"> : ${esc(String(m.n))}</span></div>`).join("");
-        return `<div class="xp-io-item"><span class="hid">RingCT ring</span> — ring of ${esc(String(v.ringSize||"?"))} outputs, ${esc(String(v.inputs||"?"))} real spend(s)<br>the real source hides among the decoys${ring ? `<div style="margin-top:5px">${ring}</div>` : ""}</div>`;
+        // ring size is public and per input, and 5 and 11 are both in live use on
+        // mainnet (consensus allows 3 to 32), so state it rather than leaving the
+        // reader to count rows and wonder what is missing
+        const listed = (v.ring || []).length, ni = v.inputs || 1;
+        const rs = v.ringSize != null ? v.ringSize : (listed && ni ? listed / ni : null);
+        const members = listed || (rs ? rs * ni : 0);
+        const decoys = members ? members - ni : 0;
+        return `<div class="xp-io-item"><span class="hid">RingCT ring</span> — <b>ring size ${esc(String(rs != null ? rs : "?"))}</b>, set by the sending wallet
+          <br>${esc(String(ni))} real spend${ni > 1 ? "s" : ""} among ${esc(String(members || "?"))} referenced output${members === 1 ? "" : "s"}${decoys > 0 ? `, the other ${esc(String(decoys))} are decoys` : ""}${ring ? `<div style="margin-top:5px">${ring}</div>` : ""}</div>`;
       }
       return `<div class="xp-io-item" data-gotx="${esc(v.txid||"")}" style="cursor:pointer" title="open the funding tx">
         ${esc(short(v.txid||"?", 10, 8))} <span style="color:var(--text-faint)">: ${esc(String(v.vout))}</span></div>`;
@@ -3003,12 +3029,15 @@
       <div class="xp-head">
         <div><div class="xp-kicker">transaction</div>
         <div class="xp-title" style="font-size:14px">${esc(short(id, 16, 12))}</div></div>
-        <i class="xp-chip" style="background:${hexA(tt.color,0.18)};color:${tt.color}">${esc(tt.name)}</i>
+        <i class="xp-chip" style="background:${hexA(tt.color,0.18)};color:${tt.color}"
+           title="${esc(ringNote.title)}">${esc(tt.name)}${esc(ringNote.suffix)}</i>
         <button class="xp-close" onclick="location.hash=''">✕</button>
       </div>
       <div class="xp-body">
         <div class="xp-hash" data-copy="${esc(id)}" title="copy txid">${esc(id)}</div>
         <div style="margin:10px 0 0">${status}</div>
+        ${ringNote.line ? `<div style="margin:10px 0 0;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.5;
+          background:${hexA(tt.color,0.07)};border:1px solid ${hexA(tt.color,0.25)};color:var(--text-dim)">${ringNote.line}</div>` : ""}
         <div class="xp-grid">
           <div class="xp-cell"><b>visible out</b><span>${d.valueOut > 0 ? esc(d.valueOut.toLocaleString(undefined,{maximumFractionDigits:8})) + " VEIL" + usd : (d.type === "ringct" ? "hidden" : "—")}</span></div>
           <div class="xp-cell"><b>fee</b><span>${d.ctFee != null ? esc(String(d.ctFee)) + " VEIL" + (stat.usd > 0 ? " · " + fmtUsd(d.ctFee * stat.usd) : "") : "—"}</span></div>
