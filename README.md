@@ -10,11 +10,19 @@ by the stairs, and catches the next ship.
 How private a transaction is decides what its Veilian looks like **and how it
 arrives** — the arrival is a picture of its traceability:
 
+The being is decided by what a transaction **writes**. How it **arrives** is decided
+by what it **spends**, because that is what its source actually is:
+
 | Type | Being | Arrival |
 |---|---|---|
 | **Basecoin** (grey) | human | walks out the front door of **The Transparent House** origin in plain sight |
-| **Stealth** (cyan) | full alien | surfaces through a ground portal you see the point, not the source |
-| **RingCT** (magenta) | hybrid, cloaked to a faint ghost | arrives under **the veil** a dark curtain hiding twelve portals (one per ring in the signature). The field only lights up *through* the cloth when a transaction lands, every portal flashing at once, and the Veilian walks out from under the sign no telling which door |
+| **Stealth** (cyan) | full alien | surfaces through a ground portal the amounts and the recipient are hidden, though the outputs it spends are still named on chain |
+| **RingCT that spends a ring** (magenta) | hybrid, cloaked to a faint ghost | arrives under **the veil** a dark curtain hiding twelve portals (one per ring in the signature). The field only lights up *through* the cloth when a transaction lands, every portal flashing at once, and the Veilian walks out from under the sign no telling which door |
+| **RingCT that only writes hidden outputs** (magenta) | the same ghost | leaves **the house** like anything else with a public origin. It builds no ring, so its source is a named outpoint you can follow. It hid what it wrote, not where its money came from |
+
+That last row is the honest part most explorers skip: a shielded looking transaction
+is not automatically a private one, and the scene refuses to imply a hidden source
+that the chain does not actually hide.
 
 The block's **coinbase** never walks the street. At the **COINBASE MINE** a crew of
 three astronauts swings at the rock face without pause, because mining is grinding

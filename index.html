@@ -1242,14 +1242,23 @@
     // so pending txs restart their walk) — don't mint a new tx or re-add the feed row
     const tx = d.reuseTx || makeTxFromData(d);
     const type = TX_TYPES[(tx.type in TX_TYPES) ? tx.type : "base"];
-    // how a Veilian arrives is how traceable it is:
-    //   base    — walks out of the house, origin in plain sight
-    //   stealth — surfaces through the ground portal: you see the point, not the source
-    //   ringct  — materialises anywhere at all, so there is nothing to trace
+    // How a Veilian arrives is how traceable its SOURCE is, which is decided by what
+    // the transaction spends, not by what it writes:
+    //   base        — walks out of the house, origin in plain sight
+    //   stealth     — surfaces through the ground portal: the amounts and the
+    //                 recipient are hidden, though the outputs it spends are named
+    //   ringct spend— comes from under the veil: the ring makes the source unknowable
+    // A transaction that only CREATES RingCT outputs spends ordinary named outpoints,
+    // so its source is public and it must not come from the veil. It hid what it
+    // wrote, not where its money came from, and it leaves the house like anything
+    // else with a traceable origin. Only tx.ringIn === true earns the veil; when the
+    // node never told us (a rare burst where even the type is a size guess) we do not
+    // claim a hidden source either.
     const fresh = d.atY == null, key = type.key;
-    const viaHouse = fresh && key === "base";
+    const ringSpend = key === "ringct" && tx.ringIn === true;
+    const viaHouse = fresh && (key === "base" || (key === "ringct" && !ringSpend));
     const viaGate  = fresh && key === "stealth";
-    const viaDrop  = fresh && key === "ringct";
+    const viaDrop  = fresh && ringSpend;
     const drop = viaDrop ? ringSpot() : null;
     // a mid-street spawn (sim seeds, restarts) must sit in open ground for its y —
     // the stem inside the corridor, the lane below the merge — never in the bushes
