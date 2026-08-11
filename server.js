@@ -100,6 +100,7 @@ let seedInfo = null;                         // DNS seeder liveness (seed.veil-i
 const SEED_HOST = process.env.VEIL_SEED_HOST || fileCfg.seedHost || "seed.veil-info.org";
 const blockGaps = [];                        // observed spacing of recent blocks (seconds)
 let lastArrival = null;
+let prevBlockTime = null;                    // previous block's own timestamp
 const memHist = [];                          // mempool depth, downsampled
 let memSampleCtr = 0;
 checkSeed(); setInterval(checkSeed, 120000);   // seeder liveness, after SEED_HOST exists
@@ -394,6 +395,26 @@ async function poll() {
                  time: blk.time || Date.now() / 1000, txids: tids, superblock: isSuperblock(h) });
         } catch (_) {}
       }
+      // and seed the block-time chart from the chain itself, so it is real history
+      // from the first pageview instead of empty until two blocks happen to land.
+      // Walking previousblockhash costs one call per block, not two.
+      try {
+        const times = [];
+        let cur = await rpc("getblockhash", [height]);
+        for (let i = 0; i < 120 && cur; i++) {
+          const hd = await rpc("getblockheader", [cur]);
+          times.push(hd.time); cur = hd.previousblockhash;
+        }
+        times.reverse();
+        for (let i = 1; i < times.length; i++) {
+          // Veil timestamps are not strictly monotonic, so a pair can come out
+          // negative. Drop those rather than draw a spike that never happened.
+          const gap = times[i] - times[i - 1];
+          if (gap >= 0 && gap < 3600) blockGaps.push(Math.round(gap));
+        }
+        while (blockGaps.length > 120) blockGaps.shift();
+        prevBlockTime = times[times.length - 1] || null;
+      } catch (_) {}
     }
 
     // new blocks
@@ -430,7 +451,14 @@ async function poll() {
           }
           for (const tid of txids) rememberTx(tid, h, hash);
           const nowS = Date.now() / 1000;
-          if (lastArrival){ blockGaps.push(Math.round(nowS - lastArrival)); if (blockGaps.length > 60) blockGaps.shift(); }
+          // on-chain spacing, matching the seeded history. Arrival deltas would drift
+          // with poll latency and mix two different measurements in one chart.
+          const bt = blk.time || nowS;
+          if (prevBlockTime != null){
+            const gap = bt - prevBlockTime;
+            if (gap >= 0 && gap < 3600){ blockGaps.push(Math.round(gap)); if (blockGaps.length > 120) blockGaps.shift(); }
+          }
+          prevBlockTime = bt;
           lastArrival = nowS;
           push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000, txids, superblock: isSuperblock(h) });
         } catch (_) {}
@@ -454,7 +482,7 @@ async function poll() {
       diffs: { pos: info.difficulty_pos || 0, progpow: info.difficulty_progpow || 0,
                randomx: info.difficulty_randomx || 0, sha256d: info.difficulty_sha256d || 0 },
       net: netInfo, seed: seedInfo,
-      blockGaps: blockGaps.slice(-40), memHist: memHist.slice(-40),
+      blockGaps: blockGaps.slice(-60), memHist: memHist.slice(-40),
       updated: Date.now(),
     };
 

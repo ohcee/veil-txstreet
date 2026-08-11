@@ -98,8 +98,11 @@
     padding: 10px 13px; backdrop-filter: blur(8px);
   }
   .legend-title { font-size: 9px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; margin-bottom: 8px; }
-  .legend-row { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--text-dim); margin: 4px 0; }
-  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .legend-row { display: flex; align-items: flex-start; gap: 8px; font-size: 10.5px; color: var(--text-dim); margin: 6px 0; line-height: 1.5; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; margin-top: 3px; }
+  /* prose, not a swatch row: flex would make every <b> its own column */
+  .legend-note { display: block; font-size: 9.5px; line-height: 1.6; color: #8b83ad; margin: 6px 0 12px; }
+  .legend-note b { color: var(--text-dim); font-weight: 700; }
 
   /* snitch list — transparent addresses, sat above the recent-blocks strip */
   .snitch { border-top: 1px solid var(--border); flex: none; background: rgba(255,90,110,0.04); }
@@ -149,10 +152,16 @@
   .stats-chip svg { width: 15px; height: 15px; }
 
   .stats-pop {
-    position: absolute; left: 16px; bottom: 84px; z-index: 7; width: 230px;
+    position: absolute; left: 16px; bottom: 84px; z-index: 7; width: 320px;
     background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 14px; backdrop-filter: blur(10px); display: none;
+    /* the panel explains things now, so it can run long: keep it on screen and
+       let it scroll rather than spilling off the top on a short window */
+    max-height: calc(100vh - 130px); overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: rgba(140,120,200,0.35) transparent;
   }
+  .stats-pop::-webkit-scrollbar { width: 6px; }
+  .stats-pop::-webkit-scrollbar-thumb { background: rgba(140,120,200,0.35); border-radius: 3px; }
   .stats-pop.open { display: block; animation: popin 0.2s ease; }
   @keyframes popin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   .sp-title { font-size: 9px; letter-spacing: 2px; color: var(--text-faint); text-transform: uppercase; margin-bottom: 10px; }
@@ -367,17 +376,20 @@
         <div class="sp-title">Network</div>
         <div class="sp-row">Peers <b id="ap-peers">—</b></div>
         <div class="sp-row">Seeder <b id="ap-seed">—</b></div>
-        <div class="ap-spark"><span>block time</span><svg id="sparkBlk" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
-        <div class="ap-spark"><span>mempool depth</span><svg id="sparkMem" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
+        <div class="ap-spark" title="Spacing between recent blocks, in seconds, read from their own timestamps on chain. Roughly the last hour."><span>block time · last ~60</span><svg id="sparkBlk" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
+        <div class="ap-spark" title="Transactions waiting in this node's mempool, sampled every 15s. There is no historical mempool to read, so this one only goes back to when the server started."><span>mempool depth · since start</span><svg id="sparkMem" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
       </div>
     </div>
 
     <div class="stats-pop" id="statsPop">
       <div class="sp-title">Transaction Types</div>
-      <div class="legend-row"><span class="legend-swatch" style="background:#8a93b0"></span> Basecoin — public transfer</div>
-      <div class="legend-row"><span class="legend-swatch" style="background:#22e0d6"></span> Stealth — one-time address</div>
-      <div class="legend-row"><span class="legend-swatch" style="background:#d64bff"></span> RingCT — fully shielded</div>
-      <div class="legend-row" style="margin:6px 0 12px;color:#6b628f;font-size:9px">Size = amount · Speed = fee priority</div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#8a93b0"></span> <span><b>Basecoin</b> — a public transfer. Sender, receiver and amount all readable by anyone, like Bitcoin.</span></div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#22e0d6"></span> <span><b>Stealth</b> — pays a one-time address and blinds the amount, so the value and who received it are hidden. The outputs it spends are still named on chain.</span></div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#d64bff"></span> <span><b>RingCT</b> — fully shielded. Amounts blinded and the input signed against a ring of decoys, so the source cannot be pinned to one output.</span></div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#ffcf5a"></span> <span><b>Zerocoin</b> — the legacy pool, still about 61% of all VEIL. Spending one cannot be traced to its mint, but denominations are public, so the amount is not private.</span></div>
+      <div class="legend-note">
+        Figure size = transaction <b>vSize</b>, not amount. Amounts are hidden on a privacy chain,
+        so nobody can draw them. Walking speed = fee priority.</div>
       <div class="sp-title">Network Detail</div>
       <div class="sp-row">Consensus <b>3 PoW algos + PoS</b></div>
       <div class="sp-row">Block time <b>~60 s</b></div>
@@ -387,6 +399,20 @@
       <div class="sp-row">Stealth tx <b id="sp-stealth">—</b></div>
       <div class="sp-row">RingCT tx <b id="sp-ringct">—</b></div>
       <div class="sp-row">Shielded share <b id="sp-priv">—</b></div>
+      <div class="sp-title" style="margin-top:12px">Feed health</div>
+      <div class="sp-row">Node <b id="sp-node">—</b></div>
+      <div class="sp-row">Last update <b id="sp-upd">—</b></div>
+      <div class="sp-row">Mempool <b id="sp-mem">—</b></div>
+      <div class="sp-title" style="margin-top:12px">Why this matters</div>
+      <div class="legend-note">
+        A privacy chain is the one place a block explorer can most easily flatter itself. It is
+        easy to badge anything shielded looking as private and let the number climb.
+        This one refuses to: it separates what a transaction <b>hid</b> from what it merely
+        <b>wrote</b>, shows the ring size protecting each spend, says when a shielded
+        transaction also paid out in the clear, and admits that a zerocoin spend publishes
+        its denominations. A privacy figure you cannot audit is marketing. The point of
+        watching your own node is that you do not have to take anyone's word for it,
+        including ours.</div>
     </div>
     <div class="stats-chip" id="statsChip">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -1482,6 +1508,8 @@
     spFee: document.getElementById("sp-fee"), spLast: document.getElementById("sp-last"),
     spBase: document.getElementById("sp-base"), spStealth: document.getElementById("sp-stealth"),
     spRingct: document.getElementById("sp-ringct"), spPriv: document.getElementById("sp-priv"),
+    spNode: document.getElementById("sp-node"), spUpd: document.getElementById("sp-upd"),
+    spMem: document.getElementById("sp-mem"),
     modeBadge: document.getElementById("modeBadge"), mbText: document.getElementById("mb-text"),
     chainNet: document.getElementById("chainNet"), footTag: document.getElementById("footTag"),
   };
@@ -1503,6 +1531,18 @@
     el.spStealth.textContent = c.stealth.toLocaleString();
     el.spRingct.textContent = c.ringct.toLocaleString();
     el.spPriv.textContent = (privacyRatio()*100).toFixed(1) + "%";
+    // feed health: say plainly whether this is live node data and how fresh it is,
+    // so a quiet street can be told apart from a broken one
+    if (el.spNode){
+      const age = lastStatAt ? Math.round((Date.now() - lastStatAt) / 1000) : null;
+      el.spNode.textContent = !LIVE ? "not connected"
+        : stat.network === "mock" ? "mock feed"
+        : "connected · " + (stat.network === "main" ? "mainnet" : stat.network);
+      el.spNode.style.color = LIVE ? "#3dff9a" : "#ff4d3d";
+      el.spUpd.textContent = age == null ? "—" : age < 5 ? "just now" : age + "s ago";
+      el.spUpd.style.color = age != null && age > 20 ? "#ffcf5a" : "";
+      el.spMem.textContent = stat.mempool + " tx";
+    }
     renderAlgoEye();
     renderNet();
   }
@@ -2755,8 +2795,10 @@
       for (const tx of pend) addPerson({ reuseTx: tx });
     } catch (_) {}
   }
+  let lastStatAt = 0;                       // when the node's numbers last reached us
   function applyStats(s){
     if (!s) return;
+    lastStatAt = Date.now();
     stat.network = s.network || stat.network;
     if (s.bestHash) stat.bestHash = s.bestHash;                 // tip hash for the waiting ship's plate
     if (typeof s.avgBlock === "number") stat.avgBlock = s.avgBlock;
