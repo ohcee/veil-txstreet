@@ -376,8 +376,8 @@
         <div class="sp-title">Network</div>
         <div class="sp-row">Peers <b id="ap-peers">—</b></div>
         <div class="sp-row">Seeder <b id="ap-seed">—</b></div>
-        <div class="ap-spark" title="Spacing between recent blocks, in seconds, read from their own timestamps on chain. Roughly the last hour."><span>block time · last ~60</span><svg id="sparkBlk" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
-        <div class="ap-spark" title="Transactions waiting in this node's mempool, sampled every 15s. There is no historical mempool to read, so this one only goes back to when the server started."><span>mempool depth · since start</span><svg id="sparkMem" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
+        <div class="ap-spark" title="Seconds between blocks, from their own timestamps on chain, averaged into 60 buckets across 24 hours."><span>block time · <i id="spanBlk">24h</i></span><svg id="sparkBlk" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
+        <div class="ap-spark" title="Transactions waiting in this node's mempool, sampled every minute and kept for 24 hours. No historical mempool exists to read, so this one can only grow forwards from first run."><span>mempool depth · <i id="spanMem">—</i></span><svg id="sparkMem" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
       </div>
     </div>
 
@@ -1569,6 +1569,14 @@
     if (se) se.innerHTML = sd ? `<span class="net-dot" style="background:${sd.up ? "#3dff9a" : "#ff4d5d"};box-shadow:0 0 5px ${sd.up ? "#3dff9a" : "#ff4d5d"}"></span>${sd.up ? sd.count + " ips" : "down"}` : "—";
     sparkInto("sparkBlk", stat.blockGaps, "#4da3ff");
     sparkInto("sparkMem", stat.memHist, "#22e0d6");
+    // say how much of the day each line actually covers. The block series is
+    // seeded from the chain so it fills in minutes; the mempool one cannot be,
+    // and has to earn its 24h by running.
+    const hh = stat.histHours || {};
+    const span = h => h == null ? "—" : h >= 23.5 ? "24h" : h >= 1 ? h.toFixed(0) + "h" : Math.round(h * 60) + "m";
+    const sb = document.getElementById("spanBlk"), sm = document.getElementById("spanMem");
+    if (sb) sb.textContent = span(hh.blocks);
+    if (sm) sm.textContent = span(hh.mem);
   }
   // The algorithm mix as a glowing alien eye: a squashed donut whose arcs are the share
   // of blocks each algo won, with its difficulty listed beside it.
@@ -2846,6 +2854,7 @@
     if (s.diffs) stat.diffs = s.diffs;
     if (s.net) stat.net = s.net;
     if (s.seed !== undefined) stat.seed = s.seed;
+    if (s.histHours) stat.histHours = s.histHours;
     if (s.blockGaps) stat.blockGaps = s.blockGaps;
     if (s.memHist) stat.memHist = s.memHist;
     if (typeof s.usd === "number"){ const had = stat.usd>0; stat.usd = s.usd; if (!had && stat.usd>0) renderTxList(); }   // re-price fees once known

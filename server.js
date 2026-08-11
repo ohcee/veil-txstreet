@@ -98,12 +98,117 @@ const dns = require("dns");
 let netInfo = null;                          // peer count / versions from getpeerinfo
 let seedInfo = null;                         // DNS seeder liveness (seed.veil-info.org)
 const SEED_HOST = process.env.VEIL_SEED_HOST || fileCfg.seedHost || "seed.veil-info.org";
-const blockGaps = [];                        // observed spacing of recent blocks (seconds)
 let lastArrival = null;
 let prevBlockTime = null;                    // previous block's own timestamp
-const memHist = [];                          // mempool depth, downsampled
 let memSampleCtr = 0;
+
+// ---------------------------------------------------------------------------
+// A day of history. Both series are timestamped, kept to a rolling 24h, and
+// written to disk, so a restart does not throw the chart away and the server
+// only has to fetch whatever happened while it was down.
+//   blkHist   [unixTime, secondsSincePreviousBlock]   seedable from the chain
+//   memSeries [unixTime, txInMempool]                 cannot be, no history exists
+// ---------------------------------------------------------------------------
+const HIST_WINDOW = 24 * 3600;
+let blkHist = [], memSeries = [];
+let histFile = null, histDirty = false, histSavedAt = 0;
+function loadHist(){
+  // per chain, like the snitch harvest: testnet spacings must not pollute mainnet
+  histFile = path.join(__dirname, CFG.rpcPort === 58812 ? "block-hist.json" : `block-hist-${CFG.rpcPort}.json`);
+  try {
+    const raw = JSON.parse(fs.readFileSync(histFile, "utf8"));
+    if (Array.isArray(raw.blocks)) blkHist = raw.blocks;
+    if (Array.isArray(raw.mem)) memSeries = raw.mem;
+    pruneHist();
+    console.log(`  history: ${blkHist.length} block samples, ${memSeries.length} mempool samples restored`);
+  } catch (_) {}
+}
+function saveHist(force){
+  if (!histFile || (!histDirty && !force)) return;
+  const now = Date.now();
+  if (!force && now - histSavedAt < 60000) return;      // at most once a minute
+  histSavedAt = now; histDirty = false;
+  try { fs.writeFileSync(histFile, JSON.stringify({ blocks: blkHist, mem: memSeries, saved: now })); } catch (_) {}
+}
+function pruneHist(){
+  const floor = Date.now() / 1000 - HIST_WINDOW;
+  blkHist = blkHist.filter(e => e && e[0] >= floor);
+  memSeries = memSeries.filter(e => e && e[0] >= floor);
+}
+// Average into n buckets across the whole window, so the line is a day rather
+// than the last few dozen samples. Gaps carry the previous value forward, since
+// a break in sampling is not a drop to zero.
+function bucket(series, n){
+  if (!series.length) return [];
+  const t0 = Date.now() / 1000 - HIST_WINDOW, w = HIST_WINDOW / n;
+  const sum = new Array(n).fill(0), cnt = new Array(n).fill(0);
+  for (const e of series){
+    let i = Math.floor((e[0] - t0) / w);
+    if (i < 0) i = 0; else if (i >= n) i = n - 1;
+    sum[i] += e[1]; cnt[i]++;
+  }
+  const out = []; let last = null;
+  for (let i = 0; i < n; i++){
+    if (cnt[i]) last = sum[i] / cnt[i];
+    if (last != null) out.push(+last.toFixed(1));
+  }
+  return out;
+}
+function spanHours(series){
+  if (series.length < 2) return 0;
+  return +((series[series.length - 1][0] - series[0][0]) / 3600).toFixed(1);
+}
+// Walk block headers backwards until a day is covered. One RPC per block via
+// previousblockhash, roughly 1440 of them on a 60s chain, so it runs in the
+// background after the server is already serving and pauses every so often to
+// let the node do its real job. A restart only refetches what it missed.
+let seedingHist = false;
+async function seedBlockHistory(fromHeight){
+  // fromHeight is passed in: this runs from the first poll, which happens BEFORE
+  // stats is rebuilt, so reading stats.height there walks back from genesis and
+  // finds nothing at all.
+  if (seedingHist || !rpcPortLocked || !(fromHeight > 0)) return;
+  seedingHist = true;
+  try {
+    // Two different jobs. If the restored file already reaches back a full day,
+    // we only need the gap since its newest sample. If it does not (first run, or
+    // the server was off for a while), walk all the way back to fill the window.
+    // Stopping at "newest" in both cases meant a fresh file never grew a past: it
+    // had one recent sample, so the walk ended after a single header.
+    const target = Date.now() / 1000 - HIST_WINDOW;
+    const newest = blkHist.length ? blkHist[blkHist.length - 1][0] : 0;
+    const oldest = blkHist.length ? blkHist[0][0] : Infinity;
+    const stopAt = oldest <= target + 120 ? newest : target;
+    let cur = await rpc("getblockhash", [fromHeight]);
+    const found = [];
+    let prev = null, walked = 0;
+    while (cur && walked < 2200){
+      const hd = await rpc("getblockheader", [cur]);
+      if (prev != null && prev - hd.time >= 0 && prev - hd.time < 3600)
+        found.push([Math.round(prev), Math.round(prev - hd.time)]);
+      prev = hd.time;
+      if (hd.time <= stopAt) break;
+      cur = hd.previousblockhash;
+      if (++walked % 40 === 0) await new Promise(r => setTimeout(r, 150));
+    }
+    if (found.length){
+      const seen = new Set(blkHist.map(e => e[0]));
+      for (const e of found) if (!seen.has(e[0])){ blkHist.push(e); seen.add(e[0]); }
+      blkHist.sort((a, b) => a[0] - b[0]);
+      pruneHist(); histDirty = true; saveHist(true);
+      console.log(`  history: walked ${walked} headers, ${blkHist.length} block samples covering ${spanHours(blkHist)}h`);
+    }
+  } catch (_) {} finally { seedingHist = false; }
+}
+function addBlockSample(t, gap){
+  if (!(gap >= 0 && gap < 3600)) return;               // Veil stamps are not monotonic
+  blkHist.push([Math.round(t), Math.round(gap)]);
+  histDirty = true;
+}
 checkSeed(); setInterval(checkSeed, 120000);   // seeder liveness, after SEED_HOST exists
+
+for (const sig of ["SIGINT", "SIGTERM"])
+  process.on(sig, () => { try { saveHist(true); } catch (_) {} process.exit(0); });
 
 function push(ev) {
   ev.seq = ++seq;
@@ -366,8 +471,10 @@ async function poll() {
                   versions: Object.entries(vers).sort((a,b) => b[1]-a[1]).slice(0, 5) };
     }
     // mempool depth history, downsampled to ~every 15s for a ~15min window
-    if (++memSampleCtr >= Math.max(1, Math.round(15000 / CFG.pollMs))){
-      memSampleCtr = 0; memHist.push(mem.size || 0); if (memHist.length > 60) memHist.shift();
+    if (++memSampleCtr >= Math.max(1, Math.round(60000 / CFG.pollMs))){
+      memSampleCtr = 0;
+      memSeries.push([Math.round(Date.now() / 1000), mem.size || 0]);
+      pruneHist(); histDirty = true; saveHist();
     }
     const height = info.blocks;
     // Veil ships a chain-wide algo/timing summary — a far better average than timing
@@ -395,26 +502,11 @@ async function poll() {
                  time: blk.time || Date.now() / 1000, txids: tids, superblock: isSuperblock(h) });
         } catch (_) {}
       }
-      // and seed the block-time chart from the chain itself, so it is real history
-      // from the first pageview instead of empty until two blocks happen to land.
-      // Walking previousblockhash costs one call per block, not two.
-      try {
-        const times = [];
-        let cur = await rpc("getblockhash", [height]);
-        for (let i = 0; i < 120 && cur; i++) {
-          const hd = await rpc("getblockheader", [cur]);
-          times.push(hd.time); cur = hd.previousblockhash;
-        }
-        times.reverse();
-        for (let i = 1; i < times.length; i++) {
-          // Veil timestamps are not strictly monotonic, so a pair can come out
-          // negative. Drop those rather than draw a spike that never happened.
-          const gap = times[i] - times[i - 1];
-          if (gap >= 0 && gap < 3600) blockGaps.push(Math.round(gap));
-        }
-        while (blockGaps.length > 120) blockGaps.shift();
-        prevBlockTime = times[times.length - 1] || null;
-      } catch (_) {}
+      // history: restore what we already had, then fill the rest in the background
+      // so the first pageview is not waiting on a day of headers
+      loadHist();
+      prevBlockTime = null;
+      seedBlockHistory(height);
     }
 
     // new blocks
@@ -454,11 +546,9 @@ async function poll() {
           // on-chain spacing, matching the seeded history. Arrival deltas would drift
           // with poll latency and mix two different measurements in one chart.
           const bt = blk.time || nowS;
-          if (prevBlockTime != null){
-            const gap = bt - prevBlockTime;
-            if (gap >= 0 && gap < 3600){ blockGaps.push(Math.round(gap)); if (blockGaps.length > 120) blockGaps.shift(); }
-          }
+          if (prevBlockTime != null) addBlockSample(bt, bt - prevBlockTime);
           prevBlockTime = bt;
+          pruneHist(); saveHist();
           lastArrival = nowS;
           push({ kind: "block", height: h, hash, txcount: txs.length, size: blk.size || 0, algo: detectAlgo(blk), time: blk.time || Date.now() / 1000, txids, superblock: isSuperblock(h) });
         } catch (_) {}
@@ -482,7 +572,8 @@ async function poll() {
       diffs: { pos: info.difficulty_pos || 0, progpow: info.difficulty_progpow || 0,
                randomx: info.difficulty_randomx || 0, sha256d: info.difficulty_sha256d || 0 },
       net: netInfo, seed: seedInfo,
-      blockGaps: blockGaps.slice(-60), memHist: memHist.slice(-40),
+      blockGaps: bucket(blkHist, 60), memHist: bucket(memSeries, 60),
+      histHours: { blocks: spanHours(blkHist), mem: spanHours(memSeries) },
       updated: Date.now(),
     };
 

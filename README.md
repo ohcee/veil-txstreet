@@ -246,8 +246,19 @@ All optional. Env var overrides `config.json` overrides the built-in default.
 
 ## Notes
 
-- On phones the scene strips down to the essentials: the lane, the ship, and the
-  walkers. Open it from another device via the LAN URL `start.sh` prints.
+- On phones the scene keeps every arrival origin (house, portal, veil, mine, cult)
+  and drops the bush field, the gantry and the floating debris. The ship carries
+  only how the block was won and which block, since four lines of text on a 90px
+  hull is a smudge. Open it from another device via the LAN URL `start.sh` prints.
+- **A day of history.** Both sparklines cover a rolling 24h, averaged into 60
+  buckets, and persist to `block-hist.json` (per chain, gitignored) so a restart
+  resumes instead of starting over. Block spacing can be *seeded from the chain*:
+  on first run the server walks about 1,400 headers backwards in the background,
+  which fills 24h in seconds and never holds up the first pageview, so the chart
+  opens full. Mempool depth cannot be, because no historical mempool exists to read
+  anywhere. It samples once a minute and grows forwards from first run, and the
+  label says how much it actually has (`12m`, `6h`, `24h`) rather than implying a
+  full day.
 - USD figures come from the mainnet market price. Set `VEIL_NO_USD=1` (as the live
   testnet mirror does) to drop them, since testnet coins have no market value.
 - Rejection is honest: a transaction that boards but isn't in the found block steps
