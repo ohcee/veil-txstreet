@@ -122,6 +122,7 @@
   .snitch-addr { font-size: 10px; color: var(--text-dim); font-family: ui-monospace, monospace;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
   .snitch-addr:hover { color: var(--veil-cyan); }
+  .snitch-seen { display: block; font-size: 8px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
   .snitch-tag { font-style: normal; font-size: 7.5px; letter-spacing: 0.6px; text-transform: uppercase;
     color: #ffcf5a; border: 1px solid rgba(255,207,90,0.45); border-radius: 3px; padding: 0 3px; margin-left: 3px; }
   .snitch-amt { text-align: right; font-size: 10px; font-weight: 700; color: #ffb3bd;
@@ -2970,6 +2971,15 @@
     if (v >= 1e3) return Math.round(v).toLocaleString();
     return v.toFixed(2);
   }
+  // compact age: a rich list wants "2y", not a timestamp
+  function snitchAge(t){
+    const d = Math.max(0, Date.now() / 1000 - t);
+    if (d < 3600) return Math.round(d / 60) + "m";
+    if (d < 86400) return Math.round(d / 3600) + "h";
+    if (d < 86400 * 60) return Math.round(d / 86400) + "d";
+    if (d < 86400 * 730) return Math.round(d / 2592000) + "mo";
+    return (d / 31536000).toFixed(1) + "y";
+  }
   function renderSnitch(d){
     const sub = document.getElementById("snitchSub"), rows = document.getElementById("snitchRows");
     if (!sub || !rows) return;
@@ -2983,10 +2993,18 @@
       const usd = (d.usd || 0) * x.amount;
       // treasury / known operators get named, so the list isn't read as private stashes
       const tag = x.label ? ` <i class="snitch-tag">${x.label}</i>` : "";
+      // when the newest coin it still holds arrived. scantxoutset only returns
+      // UNSPENT outputs, so a spend deletes its own trace: this dates the last
+      // time the address RECEIVED, which is the most the UTXO set can tell us.
+      const seen = x.lastTime ? snitchAge(x.lastTime) : "";
+      const seenTitle = x.lastTime
+        ? `last received ${new Date(x.lastTime * 1000).toLocaleDateString()} · block ${x.lastHeight.toLocaleString()}. Spends leave no trace in the UTXO set, so this is when coin last arrived, not when it last moved.`
+        : "";
       return `<div class="snitch-row">
         <span class="snitch-rank">${i+1}</span>
         <span class="snitch-addr" data-addr="${x.addr}" title="${x.addr} · ${x.outs} outputs">${short(x.addr, 7, 5)}${tag}</span>
-        <span class="snitch-amt">${fmtVeil(x.amount)} VEIL${usd > 0 ? `<span>${fmtUsd(usd)}</span>` : ""}</span>
+        <span class="snitch-amt">${fmtVeil(x.amount)} VEIL${usd > 0 ? `<span>${fmtUsd(usd)}</span>` : ""}${
+          seen ? `<span class="snitch-seen" title="${seenTitle}">in ${seen}</span>` : ""}</span>
       </div>`;
     }).join("");
   }

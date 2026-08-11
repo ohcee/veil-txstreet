@@ -692,6 +692,7 @@ let snitchList = [];                       // ranked [{ addr, amount, outs }]
 let snitchAt = 0;                          // when the ranking was last refreshed
 let snitchScanning = false;
 let snitchScanned = 0;                     // addresses priced in the last pass
+const heightTime = new Map();              // block height -> unix time (immutable, cache freely)
 let backfillAt = null;                     // height the backfill has walked down to
 
 if (rpcPortLocked) initSnitch();            // pinned port: load the harvest right away
@@ -735,8 +736,9 @@ async function rankSnitch(){
       for (const u of (r.unspents || [])){
         const a = byHex.get(u.scriptPubKey);        // this build returns no desc — map via the script
         if (!a) continue;
-        const t = totals.get(a) || { amount: 0, outs: 0, sb: 0 };
+        const t = totals.get(a) || { amount: 0, outs: 0, sb: 0, last: 0 };
         t.amount += u.amount || 0; t.outs++;
+        if (u.height > t.last) t.last = u.height;   // newest coin it still holds
         // Veil pays its budget on superblocks (every 43200). A large payout landing on
         // one of those exact heights marks the treasury, not somebody's exposed stash.
         // Requiring a big amount too, so an ordinary tx that happens to confirm in a
@@ -746,11 +748,23 @@ async function rankSnitch(){
       }
     }
     snitchList = [...totals.entries()]
-      .map(([addr, t]) => ({ addr, amount: +t.amount.toFixed(8), outs: t.outs,
+      .map(([addr, t]) => ({ addr, amount: +t.amount.toFixed(8), outs: t.outs, lastHeight: t.last,
                              label: SNITCH_LABELS[addr] || (t.sb > 0 ? "budget" : "") }))
       .filter(x => x.amount > 0)
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 15);
+    // Date the newest coin each address still holds. scantxoutset only ever returns
+    // UNSPENT outputs, so a spend erases its own evidence: this is when an address
+    // last RECEIVED, which is not the same as when it last moved anything. Heights
+    // are immutable, so one lookup each and they are cached for good.
+    for (const row of snitchList){
+      if (!row.lastHeight) continue;
+      if (heightTime.has(row.lastHeight)){ row.lastTime = heightTime.get(row.lastHeight); continue; }
+      try {
+        const hd = await rpc("getblockheader", [await rpc("getblockhash", [row.lastHeight])]);
+        if (hd && hd.time){ heightTime.set(row.lastHeight, hd.time); row.lastTime = hd.time; }
+      } catch (_) {}
+    }
     snitchScanned = addrs.length;
     snitchAt = Date.now();
     saveSnitch();

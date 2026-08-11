@@ -193,6 +193,12 @@ harvests addresses from blocks as they stream past (plus a one-time ~20k-block
 backfill) and prices the whole set against the UTXO set with `scantxoutset` every 90s.
 Balances are exact; coverage is the addresses it has *seen*, and the panel says so.
 
+Each row also dates the newest coin the address still holds, so a dormant whale reads
+differently from a pool cycling payouts. Be precise about what that is: `scantxoutset`
+only ever returns **unspent** outputs, so a spend erases its own evidence. It is when
+the address last **received**, which is the most the UTXO set can tell anyone, and not
+necessarily when it last moved something.
+
 Stealth and RingCT outputs carry no address at all, so they can never appear which
 is the point. Addresses paid on superblock heights are tagged **budget** (that's
 Veil's treasury, not somebody's stash); name pools and services in
