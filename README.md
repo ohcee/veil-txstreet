@@ -27,7 +27,21 @@ from the outputs):
 | a plain output | walks out the front door of **The Transparent House**: outpoint and value both public |
 | a blinded (CT) output | surfaces through the **ground portal**: you can name the outpoint it spent, but not its value |
 | a **ring** (an anon input) | arrives under **the veil**, a dark curtain hiding twelve portals, one per ring member. The field only lights up *through* the cloth when a ring is actually spent, every portal flashing at once, and the Veilian walks out from under the sign no telling which door |
-| a **zerocoin** mint (legacy) | simply materialises in the street. A zerocoin spend carries a null outpoint: the denomination is public, the mint it came from is not, and there is no previous output anywhere to point at |
+| a **zerocoin** mint | simply materialises in the street. A zerocoin spend carries a null outpoint: the denomination is public, the mint it came from is not, and there is no previous output anywhere to point at |
+
+And one thing a transaction can **write** that changes how its Veilian looks: a
+**zerocoin mint**. Those walkers seal into a glass helmet, because the coin is being
+locked into the accumulator. The body keeps the colour of whatever it was minted
+*from*, so you can see the path: Veil advises minting out of RingCT rather than out
+of coin anyone can follow, since a mint is linkable right up to the moment it enters
+the pool.
+
+Zerocoin is easy to overlook and it is the biggest thing on the chain. It holds about
+**61% of the entire money supply** in denominations of 10, 100, 1000 and 10000, and
+mints are the most common output Veil produces, because **every stake spends a
+zerocoin and mints fresh ones**. That loop is what keeps the pool alive. Note that
+node output reports it as `type: "standard"` and only admits `zerocoinmint` in the
+`scriptPubKey`, which is an easy way to miss the majority of the chain.
 
 Splitting these two is the honest part most explorers skip. A shielded looking
 transaction is not automatically a private one: a stealth to RingCT send writes
@@ -42,7 +56,12 @@ teleports aboard in gold stardust, the coin materialising at the ship's console.
 About half of Veil's blocks are staked, not mined, and staking is holding: at the
 **STAKING CULT** in the lower bushes three hodlers stand in a circle around a
 spinning Veil coin doing nothing, which is the whole practice. When a stake wins,
-the chosen one raises their arms and ascends in green stardust the same way. The one
+the chosen one raises their arms and ascends in green stardust the same way. The
+faithful are drawn as RingCT beings, following Veil's guidance to mint from RingCT
+now that zerocoin's own privacy is broken. Worth being straight about which part of
+that is chain and which is guidance: what a staker holds and spends is **zerocoin**,
+in every coinstake on the chain, and once minted, where it came from is unknowable
+by design. The magenta is the recommended provenance, not something the chain shows. The one
 walk left is the **superblock** escort: every 43,200 blocks the monthly budget
 payout leaves the mine under armed guard and boards in person. The departing ship is
 stamped **MINED** or **STAKED** so you always know which way the block was won. Figure size tracks transaction **vSize** (amounts

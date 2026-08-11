@@ -801,13 +801,18 @@
         continue;
       }
       const fade = hd.appearT > 0 ? 1 - hd.appearT / 0.8 : 1;
+      // the faithful are RingCT beings. Veil's guidance is to mint from RingCT,
+      // since zerocoin's own privacy is long broken, so the congregation wears the
+      // shielded tier it is advised to come from. What they hold and spend is
+      // zerocoin, and where any of it was minted from is unknowable by design.
       // the chant: while the crew hammers next door, the cult keeps its own
       // rhythm — all three lift their arms together on the beat, palms alight,
       // and settle back down. One congregation, one voice. When the block runs
       // late the chant quickens with everything else on the street.
       const up = Math.sin(chantPhase) > 0.35 - fv * 0.25;
       ctx.save(); ctx.globalAlpha = fade;
-      drawBeing(sx, sy - 4 - (up ? 1.2 : 0), 0.92, Math.sin(time * 1.3 + i * 2.2) * 0.16, green, glow, time,
+      drawBeing(sx, sy - 4 - (up ? 1.2 : 0), 0.92, Math.sin(time * 1.3 + i * 2.2) * 0.16,
+                TX_TYPES.ringct.color, TX_TYPES.ringct.glow, time,
                 { sway: i * 2.1, type: TX_TYPES.base, pose: up ? "raised" : null }, "hybrid");
       ctx.restore();
     }
@@ -1340,7 +1345,7 @@
     // ringIn: does it actually SPEND RingCT (a ring signature, an anonymity set),
     // or does it only create hidden outputs? Undefined when the node never told us.
     return { id: txSeq, hash: d.hash || rndHex(64), type: typeKey, typeName: TX_TYPES[typeKey].name,
-      ringIn: d.ringIn, src: d.src, mixed: d.mixed,
+      ringIn: d.ringIn, src: d.src, mixed: d.mixed, mint: d.mint, mintValue: d.mintValue,
       vsize: d.vsize || 500, fee: d.fee || 0, addr, t: Date.now() };
   }
   const txListEl = document.getElementById("txList");
@@ -1385,7 +1390,8 @@
          <div class="tx-meta">${tx.addr ? short(tx.addr,6,4)+" · " : "shielded · "}<span class="tx-type-badge" style="background:${hexA(t.color,0.2)};color:${t.color}" title="${
            tx.type === "ringct" && tx.ringIn === false ? "creates RingCT outputs but spends none, so no ring signature" :
            tx.type === "ringct" && tx.ringIn ? "spends RingCT: the source hides in a ring" : ""
-         }">${t.name}${tx.type === "ringct" && tx.ringIn === false ? " OUT" : ""}</span></div>
+         }">${t.name}${tx.type === "ringct" && tx.ringIn === false ? " OUT" : ""}</span>${
+           tx.mint ? `<span class="tx-type-badge" style="margin-left:4px;background:${hexA("#ffcf5a",0.2)};color:#ffcf5a" title="creates zerocoin: coins sealed into the accumulator, denominations public">MINT</span>` : ""}</div>
        </div>
        <div class="tx-amt"><div class="tx-amt-val">${fmtSize(tx.vsize)}</div><div class="tx-amt-usd">${fmtFee(tx.fee)}</div></div>
        <div class="tx-ext">↗</div>`;
@@ -2218,6 +2224,24 @@
               p.type.key === "base" ? "human" : p.type.key === "stealth" ? "alien" : "hybrid");
     ctx.restore();
 
+    // Minting zerocoin: the coin is being sealed into the accumulator, so the walker
+    // seals up too, behind a glass helmet with the pool's gold light inside it. The
+    // body keeps its own colour, so you can see which tier the mint came FROM, which
+    // is the whole point of Veil's advice to mint out of RingCT rather than the clear.
+    if (p.tx.mint && !p.miner && tp <= 0){
+      const hy2 = y - 5.4*s, r = 6.6*s;
+      ctx.globalAlpha = veil * 0.9;
+      const hg = ctx.createRadialGradient(x - r*0.3, hy2 - r*0.3, 1, x, hy2, r);
+      hg.addColorStop(0, "rgba(255,231,168,0.30)"); hg.addColorStop(1, "rgba(255,207,90,0.05)");
+      ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(x, hy2, r, 0, 6.28); ctx.fill();
+      ctx.strokeStyle = hexA("#ffcf5a", 0.75); ctx.lineWidth = 1.1*s;
+      ctx.beginPath(); ctx.arc(x, hy2, r, 0, 6.28); ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 0.8*s;   // seal ring at the collar
+      ctx.beginPath(); ctx.ellipse(x, hy2 + r*0.82, r*0.62, r*0.2, 0, 0, 6.28); ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.42)";                             // glass highlight
+      ctx.beginPath(); ctx.ellipse(x - r*0.34, hy2 - r*0.4, r*0.2, r*0.13, -0.6, 0, 6.28); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     // A shielded walker that also wrote a plain output is carrying something anyone
     // can read, so it carries it visibly: a gold coin at its side. The creature shows
     // the most private thing it wrote, and this is the part that leaked.
@@ -2763,7 +2787,7 @@
     if (mempoolSet.has(ev.txid)) return;
     mempoolSet.add(ev.txid);
     const walking = people.reduce((a,p)=>a+(p.state==="walking"?1:0),0);
-    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid, ringIn: ev.ringIn, src: ev.src, mixed: ev.mixed };
+    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid, ringIn: ev.ringIn, src: ev.src, mixed: ev.mixed, mint: ev.mint, mintValue: ev.mintValue };
     if (walking < 100) addPerson(d);          // animate it walking the street
     else addTxToFeed(makeTxFromData(d));       // burst overflow: list only
   }
@@ -2794,7 +2818,7 @@
       const row = recentTx.find(t => t.hash === m.txid);
       const walking = people.some(p => p.tx && p.tx.hash === m.txid);
       if (row && !walking) addPerson({ reuseTx: row });                  // row survived, walker didn't
-      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid, ringIn: m.ringIn, src: m.src, mixed: m.mixed });
+      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid, ringIn: m.ringIn, src: m.src, mixed: m.mixed, mint: m.mint, mintValue: m.mintValue });
     }
     // and the other direction: still shown as pending here, gone from the node
     // there — evicted, or confirmed in a moment we missed. These used to linger
@@ -3016,7 +3040,22 @@
           Which mints they came from cannot be traced, but the denominations are printed in the clear,
           so the amount this moved is public even if its outputs are hidden.</div>`
       : "";
-    const mixNote = d.vout.some(v => v.hidden) && d.vout.some(v => !v.hidden && v.kind !== "data")
+    // minting: coin sealed into the zerocoin accumulator. Which tier it came FROM is
+    // the interesting part, since Veil advises minting out of RingCT rather than the clear.
+    const mintOuts = d.vout.filter(v => v.kind === "zerocoinmint");
+    const mintSum = mintOuts.reduce((a, v) => a + (typeof v.value === "number" ? v.value : 0), 0);
+    const srcWord = { ring: "RingCT", stealth: "a blinded (CT) output", base: "transparent coin",
+                      zerocoin: "another zerocoin" }[d.src] || null;
+    const mintNote = mintOuts.length
+      ? `<div style="margin:10px 0 0;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.5;
+          background:${hexA("#ffcf5a",0.07)};border:1px solid ${hexA("#ffcf5a",0.25)};color:var(--text-dim)">
+          <b>mints zerocoin.</b> ${esc(String(mintOuts.length))} coin${mintOuts.length > 1 ? "s" : ""} sealed into the accumulator${
+          mintSum > 0 ? `, <b>${esc(mintSum.toLocaleString(undefined,{maximumFractionDigits:8}))} VEIL</b>` : ""}.
+          ${srcWord ? `Minted from <b>${esc(srcWord)}</b>. ` : ""}Veil advises minting out of RingCT, because a mint made
+          from coin anyone can follow is linkable right up to the moment it enters the pool.
+          Denominations are public; once inside, which mint is whose is not.</div>`
+      : "";
+    const mixNote = d.vout.some(v => v.hidden) && d.vout.some(v => !v.hidden && v.kind !== "data" && v.kind !== "zerocoinmint")
       ? `<div style="margin:10px 0 0;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.5;
           background:${hexA("#8a93b0",0.09)};border:1px solid ${hexA("#8a93b0",0.3)};color:var(--text-dim)">
           <b>writes both hidden and public outputs.</b> Some of what this transaction paid out is
@@ -3062,7 +3101,7 @@
     const voutHtml = d.vout.map(v => {
       if (v.kind === "data") return `<div class="xp-io-item">data${v.ctFee != null ? ` — <span class="v">fee ${esc(String(v.ctFee))} VEIL</span>` : ""}</div>`;
       if (v.hidden) return `<div class="xp-io-item"><span class="hid">amount hidden</span> — ${esc(v.kind)} output${v.commitment ? `<br>commitment ${esc(v.commitment)}…` : ""}</div>`;
-      if (v.kind === "zerocoinmint") return `<div class="xp-io-item">zerocoin mint — <span class="v">${esc(String(v.value||0))} VEIL</span></div>`;
+      if (v.kind === "zerocoinmint") return `<div class="xp-io-item"><span style="color:#ffcf5a">zerocoin mint</span> — <span class="v">${esc(String(v.value||0))} VEIL</span> <span style="color:var(--text-faint)">denomination public</span></div>`;
       if (v.kind === "nonstandard" && !(v.value > 0)) return `<div class="xp-io-item" style="opacity:0.55">stake marker</div>`;
       const lbl = v.label ? ` <i class="xp-chip" style="background:${hexA("#ffcf5a",0.16)};color:#ffcf5a">${esc(v.label)}</i>` : "";
       const addr = v.address ? `<span data-goaddr="${esc(v.address)}" style="cursor:pointer;color:var(--veil-cyan)">${esc(short(v.address, 10, 6))}</span>` : esc(v.kind);
@@ -3082,7 +3121,7 @@
         <div style="margin:10px 0 0">${status}</div>
         ${ringNote.line ? `<div style="margin:10px 0 0;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.5;
           background:${hexA(tt.color,0.07)};border:1px solid ${hexA(tt.color,0.25)};color:var(--text-dim)">${ringNote.line}</div>` : ""}
-        ${zcNote}${mixNote}
+        ${zcNote}${mintNote}${mixNote}
         <div class="xp-grid">
           <div class="xp-cell"><b>visible out</b><span>${d.valueOut > 0 ? esc(d.valueOut.toLocaleString(undefined,{maximumFractionDigits:8})) + " VEIL" + usd : (d.vout.some(v => v.hidden) ? "hidden" : "—")}</span></div>
           <div class="xp-cell"><b>fee</b><span>${d.ctFee != null ? esc(String(d.ctFee)) + " VEIL" + (stat.usd > 0 ? " · " + fmtUsd(d.ctFee * stat.usd) : "") : "—"}</span></div>

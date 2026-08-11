@@ -196,11 +196,27 @@ function spendsRing(tx) { return (tx.vin || []).some(v => v.type === "anon"); }
 // usually change. The being can only be one creature and it shows the most private
 // output, so without this flag a ghost would silently be carrying a public payment.
 // (The "data" output is Veil's fee marker, not a payment.)
+// A zerocoin mint is the easiest thing on Veil to miss: Veil's own v.type says
+// "standard" and only scriptPubKey.type admits it is a zerocoinmint. They are the
+// most common output on the chain, because every stake spends a zerocoin and mints
+// fresh ones, and the pool holds the majority of the money supply.
+function mintOuts(tx) {
+  return (tx.vout || []).filter(v =>
+    String((v.scriptPubKey || {}).type || "").toLowerCase().includes("zerocoinmint") ||
+    String(v.type || "").toLowerCase().includes("zerocoinmint"));
+}
+function writesMint(tx) { return mintOuts(tx).length > 0; }
+function mintTotal(tx) {
+  return +mintOuts(tx).reduce((a, v) => a + (typeof v.value === "number" ? v.value : 0), 0).toFixed(8);
+}
 function writesMixed(tx) {
   let shielded = false, plain = false;
   for (const v of (tx.vout || [])) {
     const t = String(v.type || (v.scriptPubKey || {}).type || "").toLowerCase();
     if (t === "data") continue;
+    // a zerocoin mint publishes its denomination but is not a public payment, and it
+    // has its own note. Counting it as "plain" made every mint look like leaked change.
+    if (String((v.scriptPubKey || {}).type || "").toLowerCase().includes("zerocoinmint")) continue;
     if (t.includes("anon") || t.includes("ringct") || t.includes("blind") || t === "ct") shielded = true;
     else plain = true;
   }
@@ -229,7 +245,7 @@ function realPrevout(v){
          (v["vout.n"] != null ? v["vout.n"] : v.vout) !== 0xffffffff;
 }
 let kindLookups = 0;                             // budget, reset each poll
-async function sourceKind(tx){
+async function sourceKind(tx, force){
   if (spendsRing(tx)) return "ring";
   // legacy zerocoin: the coin comes out of the accumulator, so the denomination is
   // public but the mint it came from is not. No outpoint exists to trace.
@@ -239,7 +255,9 @@ async function sourceKind(tx){
   const n = vin["vout.n"] != null ? vin["vout.n"] : vin.vout;
   const key = vin.txid + ":" + n;
   if (KIND_CACHE.has(key)) return KIND_CACHE.get(key);
-  if (kindLookups >= 12) return null;            // don't hammer the node on a big block
+  // the cap protects the node while it chews through a block. A page someone is
+  // actually looking at is one cached lookup, so it is never rationed.
+  if (!force && kindLookups >= 12) return null;
   kindLookups++;
   try {
     const prev = await rpc("getrawtransaction", [vin.txid, true]);
@@ -294,9 +312,11 @@ function pumpTx() {
     }
     inflight++;
     rpc("getrawtransaction", [txid, true])
-      .then(async tx => { const t = classify(tx), ri = spendsRing(tx), src = await sourceKind(tx), mx = writesMixed(tx);
-                    memNow.set(txid, { txid, vsize, fee, type: t, time, ringIn: ri, src, mixed: mx });
-                    push({ kind: "tx", txid, vsize, fee, type: t, time, ringIn: ri, src, mixed: mx }); })
+      .then(async tx => { const t = classify(tx), ri = spendsRing(tx), src = await sourceKind(tx),
+                          mx = writesMixed(tx), mint = writesMint(tx), mv = mint ? mintTotal(tx) : 0;
+                    const ev = { txid, vsize, fee, type: t, time, ringIn: ri, src, mixed: mx, mint, mintValue: mv };
+                    memNow.set(txid, ev);
+                    push({ kind: "tx", ...ev }); })
       .catch(() => { const t = heuristicType(vsize); memNow.set(txid, { txid, vsize, fee, type: t, time });
                      push({ kind: "tx", txid, vsize, fee, type: t, time }); })
       .finally(() => { inflight--; pumpTx(); });
@@ -402,7 +422,8 @@ async function poll() {
             if (idx >= rewardTxs && !known.has(tid)) {
               if (full) push({ kind: "tx", txid: tid, vsize: tx.vsize || tx.size || 500, fee: 0,
                                type: classify(tx), ringIn: spendsRing(tx), src: await sourceKind(tx),
-                               mixed: writesMixed(tx), time: blk.time || Date.now() / 1000 });
+                               mixed: writesMixed(tx), mint: writesMint(tx), mintValue: writesMint(tx) ? mintTotal(tx) : 0,
+                               time: blk.time || Date.now() / 1000 });
               else push({ kind: "tx", txid: tid, vsize: 800, fee: 0, type: heuristicType(800), time: blk.time || Date.now() / 1000 });
             }
             known.delete(tid);
@@ -774,7 +795,9 @@ async function apiTx(id, blockHint){
     if (typeof v.value === "number" && v.value > 0) out += v.value;
     if (voutKind(v) === "data" && v.ct_fee != null) ctFee = +v.ct_fee;
   }
-  return { ok: true, txid: tx.txid, type: classify(tx),
+  // src is what it actually SPENT, resolved from the prevout. The page needs it to
+  // say where a mint came from, which is the part Veil's guidance is about.
+  return { ok: true, txid: tx.txid, type: classify(tx), src: await sourceKind(tx, true),
            size: tx.size, vsize: tx.vsize || tx.size, locktime: tx.locktime,
            context: ctx, valueOut: +out.toFixed(8), ctFee,
            vin: (tx.vin || []).map(shapeVin), vout: (tx.vout || []).map(shapeVout) };
