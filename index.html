@@ -1868,6 +1868,7 @@
     // left half of a phone screen was empty anyway.
     drawMine(time); drawMineCrew(time); drawVault(time); drawHouse(time);
     drawLane(time);
+    drawMedianLabels();        // after the lane, or the lane paints over CHAIN
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
     drawStairs(time);          // boarding stairs from the corridor up to the ship
     drawRingPads(time);        // the twelve RingCT portals, right of the bushes
@@ -1963,12 +1964,36 @@
     // edge lines
     ctx.strokeStyle = "rgba(61,255,154,0.4)"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(geo.roadX0,0); ctx.lineTo(geo.roadX0,H); ctx.stroke();
-    // median between road and lane
-    ctx.fillStyle = "#0c0818"; ctx.fillRect(geo.medianX0, 0, geo.medianX1-geo.medianX0, H);
+    // The median is the line between the mempool and the chain. Everything walking
+    // on the street side is still pending; the lane past it belongs to blocks, and
+    // the boarding stairs are the only crossing, which is exactly how a transaction
+    // gets confirmed. Soft edges so it reads as a divider rather than a second road
+    // (insetting the fill instead would leave a seam, since the road ends where the
+    // median begins).
+    const mw = geo.medianX1 - geo.medianX0;
+    const mg = ctx.createLinearGradient(geo.medianX0, 0, geo.medianX1, 0);
+    mg.addColorStop(0, "#2b2151"); mg.addColorStop(0.34, "#0c0818");
+    mg.addColorStop(0.66, "#0c0818"); mg.addColorStop(1, "#191134");
+    ctx.fillStyle = mg; ctx.fillRect(geo.medianX0, 0, mw, H);
     ctx.strokeStyle = "rgba(123,47,214,0.5)"; ctx.lineWidth = 2; ctx.setLineDash([10,14]);
     ctx.lineDashOffset = -(scroll)%24;
     ctx.beginPath(); ctx.moveTo((geo.medianX0+geo.medianX1)/2,0); ctx.lineTo((geo.medianX0+geo.medianX1)/2,H); ctx.stroke();
     ctx.setLineDash([]);
+  }
+  // Name the two sides, so the divider stops looking like a road to nowhere. Drawn
+  // after the lane, not with the median: the CHAIN label sits inside the lane and
+  // drawLane paints straight over anything the road put there. A phone has no room
+  // for this, so there it stays an unlabelled median.
+  function drawMedianLabels(){
+    if (NARROW) return;
+    // low, below where the RingCT curtain ends: up near the stoplight the labels sat
+    // behind the attendant, and mid-screen they run into the boarding stairs
+    const ly = H * 0.96;
+    ctx.font = "800 8px ui-monospace, monospace"; ctx.textAlign = "left";
+    ctx.save(); ctx.translate(geo.medianX0 - 4, ly); ctx.rotate(-Math.PI/2);
+    ctx.fillStyle = "rgba(203,194,236,0.55)"; ctx.fillText("MEMPOOL", 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(geo.medianX1 + 12, ly); ctx.rotate(-Math.PI/2);
+    ctx.fillStyle = "rgba(61,255,154,0.6)"; ctx.fillText("CHAIN", 0, 0); ctx.restore();
   }
 
   function drawLane(time){

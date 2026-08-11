@@ -49,6 +49,12 @@ nothing but hidden outputs and still spends coin anyone can point at, so it come
 through the portal rather than out of the veil. Only a real ring signature earns the
 veil, and only a real ring lights it.
 
+The strip between the street and the lane is not decoration. It is the line between
+the **mempool** and the **chain**, and the boarding stairs are the only way across it,
+which is exactly how a transaction gets confirmed: a block has to take it. Every
+walker crosses that line once, on the stairs, or waits and tries the next ship. On a
+phone it stays an unlabelled median, because there is no room for the words.
+
 The block's **coinbase** never walks the street. At the **COINBASE MINE** a crew of
 three astronauts swings at the rock face without pause, because mining is grinding
 in place: when a PoW block is found, the one whose pick struck it raises it high and
