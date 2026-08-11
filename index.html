@@ -575,13 +575,17 @@
     // above them, so nobody crosses this ground except the RingCT who arrive on it.
     geo.ringSpots = [];
     { const bandL = geo.tRight + 14, bandR = geo.roadX1 - 12;
-      const yT = geo.boardY + 34, yB = H * 0.86;
+      const yT = geo.boardY + 34;
+      // the band is only ~45px wide on a phone, and running it to 0.86H made the
+      // curtain a 5:1 vertical smear. Keep it closer to square there.
+      const yB = NARROW ? Math.min(H * 0.86, yT + H * 0.26) : H * 0.86;
       // the fogged field the portals sit in — arrivals happen somewhere under here
       geo.ringField = { x0: bandL - 6, x1: bandR + 6, y0: yT - 16, y1: yB + 14 };
       // all twelve pads huddle well inside the curtain's opaque core: at rest not a
       // single ring shows through the cloth — the veil reads as solid dark ground
       const cx = (bandL + bandR) / 2, cy = (yT + yB) / 2, h2 = (yB - yT) / 2;
-      const xs = [cx - (bandR - bandL) * 0.17, cx + (bandR - bandL) * 0.17];
+      const spread = (bandR - bandL) * (NARROW ? 0.26 : 0.17);
+      const xs = [cx - spread, cx + spread];
       for (let row = 0; row < 6; row++) for (const x of xs)
         geo.ringSpots.push({ x, y: cy + h2 * 0.52 * (row / 2.5 - 1) }); }
     buildScenery();
@@ -929,22 +933,22 @@
   // the twelve RingCT portals — a RingCT materialises on one of them, then walks
   // straight down and cuts across to the ship
   function drawRingPads(time){
-    if (NARROW || !geo.ringSpots || !geo.ringField) return;
+    if (!geo.ringSpots || !geo.ringField) return;
     const mag = "#d64bff", f = geo.ringField;
-    originSign((f.x0 + f.x1) / 2, f.y0 - 6, "RINGCT PORTALS", mag);
+    originSign((f.x0 + f.x1) / 2, f.y0 - 6, NARROW ? "RINGCT" : "RINGCT PORTALS", mag);
     // Only the dark pads live down here, and the cloth above swallows them whole:
     // at rest the field is just black ground. When a RingCT lands the rings burn
     // through the veil itself — that happens up in drawRingFog, above the cloth.
     for (let i = 0; i < geo.ringSpots.length; i++){
       const p = geo.ringSpots[i];
       ctx.fillStyle = "rgba(10,5,18,0.8)";
-      ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3, 0, 0, 6.28); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, NARROW ? 5 : 8, NARROW ? 2 : 3, 0, 0, 6.28); ctx.fill();
     }
   }
   // small named sign over an arrival point, in that origin's colour
   function originSign(x, y, text, col){
-    ctx.font = "800 8px ui-monospace, monospace";
-    const w2 = Math.max(74, ctx.measureText(text).width + 18);
+    ctx.font = (NARROW ? "800 7px " : "800 8px ") + "ui-monospace, monospace";
+    const w2 = Math.max(NARROW ? 44 : 74, ctx.measureText(text).width + (NARROW ? 12 : 18));
     ctx.fillStyle = "#0b1220"; roundRect(x - w2/2, y - 10, w2, 19, 4); ctx.fill();
     ctx.strokeStyle = hexA(col, 0.85); ctx.lineWidth = 1.4;
     roundRect(x - w2/2, y - 10, w2, 19, 4); ctx.stroke();
@@ -986,12 +990,13 @@
       const mag = "#d64bff", lit = ringFlash;
       for (let i = 0; i < geo.ringSpots.length; i++){
         const p = geo.ringSpots[i];
-        const gg = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 15);
+        const rr = NARROW ? 10 : 15, px2 = NARROW ? 5 : 8, py2 = NARROW ? 2 : 3;
+        const gg = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, rr);
         gg.addColorStop(0, hexA(mag, 0.38 * lit)); gg.addColorStop(1, hexA(mag, 0));
-        ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(p.x, p.y, 15, 6, 0, 0, 6.28); ctx.fill();
-        ctx.strokeStyle = hexA(mag, 0.9 * lit); ctx.lineWidth = 1.7;
+        ctx.fillStyle = gg; ctx.beginPath(); ctx.ellipse(p.x, p.y, rr, rr * 0.4, 0, 0, 6.28); ctx.fill();
+        ctx.strokeStyle = hexA(mag, 0.9 * lit); ctx.lineWidth = NARROW ? 1.2 : 1.7;
         ctx.shadowColor = mag; ctx.shadowBlur = 9 * lit;
-        ctx.beginPath(); ctx.ellipse(p.x, p.y, 8, 3, 0, 0, 6.28); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, px2, py2, 0, 0, 6.28); ctx.stroke();
         ctx.shadowBlur = 0;
       }
     }
@@ -1001,7 +1006,7 @@
   // open, with a short ramp just past the hem so they surface instead of popping in
   function veilCover(x, y){
     const f = geo.ringField;
-    if (NARROW || !f) return 1;
+    if (!f) return 1;
     const dx = (x - (f.x0 + f.x1) / 2) / ((f.x1 - f.x0) / 2 + 8);
     const dy = (y - (f.y0 + f.y1) / 2) / ((f.y1 - f.y0) / 2 + 10);
     const r = Math.sqrt(dx * dx + dy * dy);          // 1 = the curtain's hem
@@ -1856,7 +1861,12 @@
 
     drawSidewalk(time);
     drawRoad(time);
-    if (!NARROW){ drawBushes(time); drawMine(time); drawMineCrew(time); drawVault(time); drawHouse(time); }  // bush field, mine + crew, cult + house
+    if (!NARROW) drawBushes(time);                       // the bush field is desktop only
+    // A phone used to get exactly one origin, the stealth portal, while RingCT and
+    // basecoin walkers appeared out of bare road. The whole point of an arrival is
+    // showing where the money came from, so the origins come to the phone too. The
+    // left half of a phone screen was empty anyway.
+    drawMine(time); drawMineCrew(time); drawVault(time); drawHouse(time);
     drawLane(time);
     drawDestination(time);     // the moon at the head of the lane (past the Blockchain sign)
     drawStairs(time);          // boarding stairs from the corridor up to the ship
@@ -1889,7 +1899,7 @@
     // people (draw far/higher first)
     const order = people.slice().sort((a,c)=>a.y-c.y);
     for (const p of order) drawPerson(p, time);
-    if (!NARROW) drawRingFog(time);      // the shroud over the portal field — over the people, on purpose
+    drawRingFog(time);                   // the shroud over the portal field — over the people, on purpose
 
     if (!NARROW) drawGantry(time);      // phones keep only the ship, walkers and lane
     drawStoplight(time);
@@ -2178,13 +2188,18 @@
     // a launched ship declares HOW its block was won — staked quietly, or mined
     const hdr = launching ? (b.algo === "pos" ? "STAKED" : b.algo && b.algo !== "unknown" ? "MINED" : "BLOCK") : "BLOCK";
     ctx.fillStyle = launching && hdr !== "BLOCK" ? oc : "rgba(233,226,255,0.9)";
-    fitFont(hdr, 10, "800", lblW); ctx.fillText(hdr, cx, y+h*0.64);
+    // A phone hull is roughly ninety pixels wide. Four stacked lines there is not
+    // information, it is a smudge, so keep the two that carry the story (how the
+    // block was won, and which block) and give them the room the others were using.
+    fitFont(hdr, NARROW ? 12 : 10, "800", lblW); ctx.fillText(hdr, cx, y + h * (NARROW ? 0.62 : 0.64));
     const hTxt = "#"+bh.toLocaleString();
-    ctx.fillStyle = oc; fitFont(hTxt, 12, "800", lblW); ctx.fillText(hTxt, cx, y+h*0.72);
-    ctx.fillStyle = "rgba(233,226,255,0.6)"; fitFont(bt+" tx", 9, "700", lblW); ctx.fillText(bt+" tx", cx, y+h*0.79);
+    ctx.fillStyle = oc; fitFont(hTxt, NARROW ? 15 : 12, "800", lblW); ctx.fillText(hTxt, cx, y + h * (NARROW ? 0.73 : 0.72));
+    if (!NARROW){
+      ctx.fillStyle = "rgba(233,226,255,0.6)"; fitFont(bt+" tx", 9, "700", lblW); ctx.fillText(bt+" tx", cx, y+h*0.79);
+    }
     // hash stencilled on the rear: a launched ship carries its own block's hash;
     // a ship still forming the next block shows the best (tip) hash it builds on
-    const rearHash = b.blockHash || (isLead ? stat.bestHash : "");
+    const rearHash = NARROW ? "" : (b.blockHash || (isLead ? stat.bestHash : ""));
     if (rearHash){
       ctx.fillStyle = hexA(oc, b.blockHash ? 0.85 : 0.55); ctx.font = "700 7.5px ui-monospace, monospace";
       ctx.fillText(short(rearHash, 6, 6), cx, y+h*0.845);
