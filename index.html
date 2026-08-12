@@ -1336,6 +1336,8 @@
       climbX: (viaDrop && geo.ringField) ? (geo.ringField.x0 + geo.ringField.x1) / 2 : spawnX,
       direct: viaGate || !!(drop && drop.direct),   // portal arrivals walk straight down, not via the stem
       phase: Math.random() * 6.28, sway: Math.random() * 6.28,
+      // house arrivals walk straight down off the doorstep before merging
+      porch: viaHouse ? spawnY + 22 : 0,
       state: "walking", boards: true,      // every walker is a pending tx bound for the ship
       cloakGoal: type.key === "ringct" ? 1 : (type.key === "stealth" ? 0.6 : 0),
       cloak: 0, shards: [], targetBus: null, seat: 0,
@@ -1796,7 +1798,12 @@
         }
         // funnel out of the T's bar and down its stem toward the entrance
         // (portal arrivals skip this — they're already beside the ship)
-        if (!p.direct && p.y > geo.tBarY1 && p.y < geo.mergeY0) {
+        // The house stands BELOW the top bar, so a walker leaving it is already past
+        // tBarY1 on its very first frame and used to be pulled toward the stem
+        // immediately, sliding out sideways instead of walking out of the door.
+        // It gets a doorstep to clear first.
+        const onPorch = p.porch && p.y < p.porch;
+        if (!p.direct && !onPorch && p.y > geo.tBarY1 && p.y < geo.mergeY0) {
           p.x += (geo.tStemC - p.x) * Math.min(1, dt * 1.8);
           p.spawnX = p.x;                       // the later lane merge starts from here
         }
