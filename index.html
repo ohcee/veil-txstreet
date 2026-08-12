@@ -1346,13 +1346,26 @@
     return p;
   }
   // simulation spawner (used until a real feed connects)
+  // The simulation has no node to ask what a transaction spent, and the honest
+  // fallback is to never claim the veil on a guess. That is right for live data
+  // and wrong here: it left the demo with no ring spends at all, so the portals
+  // never lit and nobody came out from under the cloth. A simulation invents the
+  // transaction, so it invents the provenance too, weighted to match what mainnet
+  // actually does.
+  function simSource(typeKey){
+    const r = Math.random();
+    if (typeKey === "base") return { src: "base", ringIn: false };
+    if (typeKey === "stealth") return { src: r < 0.6 ? "zerocoin" : "base", ringIn: false };
+    return r < 0.5 ? { src: "ring", ringIn: true } : { src: "stealth", ringIn: false };
+  }
   function spawnPerson(atY) {
     const r = Math.random();
     const typeKey = r < 0.2 ? "base" : r < 0.55 ? "stealth" : "ringct";
     const vsize = Math.round(typeKey === "ringct" ? 2200 + Math.random()*3200
                            : typeKey === "stealth" ? 900 + Math.random()*1400
                            : 240 + Math.random()*420);
-    return addPerson({ type: typeKey, vsize, fee: +(Math.random()*0.0006).toFixed(6), atY });
+    return addPerson({ type: typeKey, vsize, fee: +(Math.random()*0.0006).toFixed(6), atY,
+                       ...simSource(typeKey), mint: Math.random() < 0.06, mintValue: 1000 });
   }
 
   // ---------------------------------------------------------------------------

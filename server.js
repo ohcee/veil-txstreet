@@ -615,6 +615,19 @@ async function poll() {
 // mock feed
 // ---------------------------------------------------------------------------
 function randHex(n) { let s = ""; const h = "0123456789abcdef"; for (let i = 0; i < n; i++) s += h[(Math.random() * 16) | 0]; return s; }
+// The mock feed invents transactions, so it has to invent their provenance too.
+// Without a src the page has no node to ask, and its honest fallback is to never
+// claim the veil, which left the demo with no ring spends at all: the portals
+// never lit and nobody ever walked out from under the cloth. Weighted to match
+// what mainnet actually does, measured over 400 blocks.
+function mockSource(type){
+  const r = Math.random();
+  if (type === "base") return { src: "base", ringIn: false };
+  // zerocoin to stealth is the single most common real conversion
+  if (type === "stealth") return { src: r < 0.6 ? "zerocoin" : "base", ringIn: false };
+  // ringct is fed about equally by real ring spends and by blinded coin
+  return r < 0.5 ? { src: "ring", ringIn: true } : { src: "stealth", ringIn: false };
+}
 function startMock() {
   let h = 3_200_000 + ((Math.random() * 5000) | 0);
   stats = { mode: "live", network: "mock", height: h, difficulty: 230000, hashrate: 400e6, mempool: 0, usd: CFG.noUsd ? 0 : (usdPrice || 0.0016), updated: Date.now() };
@@ -627,7 +640,10 @@ function startMock() {
       const r = Math.random();
       const type = r < 0.2 ? "base" : r < 0.55 ? "stealth" : "ringct";
       const vsize = Math.round(type === "ringct" ? 2200 + Math.random() * 3200 : type === "stealth" ? 900 + Math.random() * 1400 : 240 + Math.random() * 420);
-      push({ kind: "tx", txid: randHex(64), vsize, fee: +(Math.random() * 0.001).toFixed(6), type, time: Date.now() / 1000 });
+      const prov = mockSource(type);
+      push({ kind: "tx", txid: randHex(64), vsize, fee: +(Math.random() * 0.001).toFixed(6), type,
+             ...prov, mint: Math.random() < 0.06, mintValue: 1000,
+             time: Date.now() / 1000 });
       stats.mempool++;
     }
   }, 550);
