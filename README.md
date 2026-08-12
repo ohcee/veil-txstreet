@@ -36,7 +36,11 @@ locked into the accumulator. The body keeps the colour of whatever it was minted
 Veil advises minting out of RingCT rather than out of coin anyone can follow, since a
 mint is linkable right up to the moment it enters the pool. On the approach to the
 ship the seal completes: the walker flares as the coin locks into the accumulator.
-No badge is worn afterwards, and that is deliberate. Two things already answer the
+A mint is also **sized by its denomination** and prints the figure above itself, 10
+through 10000. That is the one honest exception to sizing everyone by vSize: amounts
+are hidden everywhere else on this chain, but a zerocoin mint publishes its
+denomination, so a 10000 really can tower over a 10. No badge is worn afterwards,
+and that is deliberate. Two things already answer the
 two questions worth asking, colour for what a transaction wrote and the door for what
 it spent, and hanging a third worn mark on a Veilian to say "staking now" only
 repeats what the mint already showed. It also drifts towards the ring-and-halo look

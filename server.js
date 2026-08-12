@@ -635,6 +635,11 @@ function mockSource(type){
   // ringct is fed about equally by real ring spends and by blinded coin
   return r < 0.5 ? { src: "ring", ringIn: true } : { src: "stealth", ringIn: false };
 }
+const MOCK_DENOMS = [10, 100, 1000, 10000];       // the real zerocoin denominations
+function mockMint(){
+  if (Math.random() >= 0.07) return { mint: false };
+  return { mint: true, mintValue: MOCK_DENOMS[(Math.random() * MOCK_DENOMS.length) | 0] };
+}
 function startMock() {
   let h = 3_200_000 + ((Math.random() * 5000) | 0);
   stats = { mode: "live", network: "mock", height: h, difficulty: 230000, hashrate: 400e6, mempool: 0, usd: CFG.noUsd ? 0 : (usdPrice || 0.0016), updated: Date.now() };
@@ -649,7 +654,7 @@ function startMock() {
       const vsize = Math.round(type === "ringct" ? 2200 + Math.random() * 3200 : type === "stealth" ? 900 + Math.random() * 1400 : 240 + Math.random() * 420);
       const prov = mockSource(type);
       push({ kind: "tx", txid: randHex(64), vsize, fee: +(Math.random() * 0.001).toFixed(6), type,
-             ...prov, mint: Math.random() < 0.06, mintValue: 1000,
+             ...prov, ...mockMint(),
              time: Date.now() / 1000 });
       stats.mempool++;
     }

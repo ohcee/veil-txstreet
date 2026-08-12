@@ -397,7 +397,9 @@
       <div class="legend-row"><span class="legend-swatch" style="background:#ffcf5a"></span> <span><b>Zerocoin</b> — the legacy pool, still about 61% of all VEIL. Spending one cannot be traced to its mint, but denominations are public, so the amount is not private.</span></div>
       <div class="legend-note">
         Figure size = transaction <b>vSize</b>, not amount. Amounts are hidden on a privacy chain,
-        so nobody can draw them. Walking speed = fee priority.</div>
+        so nobody can draw them. The one exception is a <b>zerocoin mint</b>, whose denomination is
+        public: those walkers wear a sealed helmet and are sized by the amount they minted, 10 through
+        10000, with the figure printed above them. Walking speed = fee priority.</div>
       <div class="sp-title">Network Detail</div>
       <div class="sp-row">Consensus <b>3 PoW algos + PoS</b></div>
       <div class="sp-row">Block time <b>~60 s</b></div>
@@ -1337,7 +1339,13 @@
                  : viaGate  ? geo.gateY + (Math.random()-0.5)*10
                  : viaDrop  ? drop.y
                             : geo.tBarY0 + Math.random() * (geo.tBarY1 - geo.tBarY0);
-    const size = sizeFromVsize(tx.vsize);
+    // A zerocoin mint is the one transaction on this chain whose amount is public:
+    // denominations are 10, 100, 1000 and 10000 and the mint says which. So it is the
+    // one walker whose size can honestly mean the amount. Everyone else stays sized by
+    // vSize, because their amounts are hidden and drawing them would be invention.
+    const size = (tx.mint && tx.mintValue > 0)
+      ? Math.max(0.80, Math.min(2.05, 0.60 + Math.log10(tx.mintValue) * 0.26))
+      : sizeFromVsize(tx.vsize);
     const feePriority = Math.min(1, (tx.fee || 0) / 0.0004);
     // deliberately slow so you can watch them cross; the shielded types amble the most
     const baseSpd = type.key === "ringct" ? 14 : type.key === "stealth" ? 18 : 22;
@@ -1380,6 +1388,12 @@
     if (typeKey === "stealth") return { src: r < 0.6 ? "zerocoin" : "base", ringIn: false };
     return r < 0.5 ? { src: "ring", ringIn: true } : { src: "stealth", ringIn: false };
   }
+  // Veil's zerocoin denominations are 10 / 100 / 1000 / 10000, and they are public
+  const DENOMS = [10, 100, 1000, 10000];
+  function simMint(){
+    if (Math.random() >= 0.07) return { mint: false };
+    return { mint: true, mintValue: DENOMS[(Math.random() * DENOMS.length) | 0] };
+  }
   function spawnPerson(atY) {
     const r = Math.random();
     const typeKey = r < 0.2 ? "base" : r < 0.55 ? "stealth" : "ringct";
@@ -1387,7 +1401,7 @@
                            : typeKey === "stealth" ? 900 + Math.random()*1400
                            : 240 + Math.random()*420);
     return addPerson({ type: typeKey, vsize, fee: +(Math.random()*0.0006).toFixed(6), atY,
-                       ...simSource(typeKey), mint: Math.random() < 0.06, mintValue: 1000 });
+                       ...simSource(typeKey), ...simMint() });
   }
 
   // ---------------------------------------------------------------------------
@@ -2470,8 +2484,17 @@
       ctx.fillStyle = "#ffcf5a"; ctx.beginPath(); ctx.arc(mx, my, 2.3*s, 0, 6.28); ctx.fill();
       ctx.globalAlpha = 1;
     }
+    // a mint shows its denomination instead of its size: on a chain that hides
+    // amounts, this is the one figure anybody can actually read
+    if (p.tx.mint && p.tx.mintValue > 0 && !p.miner && tp <= 0){
+      ctx.globalAlpha = veil; ctx.fillStyle = "#ffcf5a"; ctx.textAlign = "center";
+      ctx.font = "800 8.5px ui-monospace, monospace";
+      ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 5;
+      ctx.fillText(p.tx.mintValue.toLocaleString(), x, y - 15.5*s);
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    }
     // size glyph for large tx
-    if (s > 1.35 && !p.miner && tp <= 0){ ctx.fillStyle = hexA(gl, 0.9 * ghost); ctx.textAlign = "center";
+    else if (s > 1.35 && !p.miner && tp <= 0){ ctx.fillStyle = hexA(gl, 0.9 * ghost); ctx.textAlign = "center";
       ctx.font = "700 8px ui-monospace, monospace"; ctx.fillText(fmtSize(p.tx.vsize), x, y-16*s); }
   }
 
