@@ -760,18 +760,25 @@
     { present: true, respawnT: 0, dissolveT: 0, appearT: 0, chosenT: 0 },
     { present: true, respawnT: 0, dissolveT: 0, appearT: 0, chosenT: 0 },
   ];
-  // The mark of coin that is in the zerocoin pool and therefore staking: a slow
-  // gold ring. A minted walker earns it at the flash, and the cult wear it always,
-  // because that is precisely what they are holding.
-  function drawStakeRing(x, y, s, time, ph, a){
+  // The mark of coin that sits in the zerocoin pool and is therefore staking.
+  // Deliberately NOT a ring: "ring" already means the RingCT ring signature here,
+  // twelve portals and a ring size, and wearing one to mean something else would
+  // read as the wrong claim entirely. A sash instead, worn across the chest like
+  // the colours of an order, leaving the body tint visible so you can still see
+  // which tier the coin was minted from.
+  function drawStakeMark(x, y, s, time, ph, a){
     ctx.save(); ctx.globalAlpha = a;
-    ctx.translate(x, y); ctx.rotate(Math.sin(time * 0.8 + ph) * 0.22);
-    ctx.strokeStyle = hexA("#ffcf5a", 0.9); ctx.lineWidth = 1.25 * s;
-    ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 6 * s;
-    ctx.beginPath(); ctx.ellipse(0, 0, 9.5 * s, 3.1 * s, 0, 0, 6.28); ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.lineWidth = 0.5 * s;
-    ctx.beginPath(); ctx.ellipse(0, 0, 9.5 * s, 3.1 * s, 0, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+    ctx.translate(x, y); ctx.rotate(-0.52 + Math.sin(time * 0.9 + ph) * 0.03);
+    const w = 3.1 * s, h = 12 * s;
+    const g = ctx.createLinearGradient(-w, -h / 2, w, h / 2);
+    g.addColorStop(0, "#ffe6a0"); g.addColorStop(0.5, "#ffcf5a"); g.addColorStop(1, "#d99b1f");
+    ctx.fillStyle = g; ctx.shadowColor = "#ffcf5a"; ctx.shadowBlur = 4 * s;
+    roundRect(-w / 2, -h / 2, w, h, 1.1 * s); ctx.fill(); ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(120,80,0,0.5)"; ctx.lineWidth = 0.5 * s;
+    roundRect(-w / 2, -h / 2, w, h, 1.1 * s); ctx.stroke();
+    // the Veil V struck on it, the same mark the coin carries
+    ctx.strokeStyle = "#8a5a00"; ctx.lineWidth = 0.75 * s; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(-1 * s, -1.1 * s); ctx.lineTo(0, 0.7 * s); ctx.lineTo(1 * s, -1.1 * s); ctx.stroke();
     ctx.restore();
   }
   function drawVault(time){
@@ -860,7 +867,7 @@
                 TX_TYPES.ringct.color, TX_TYPES.ringct.glow, time,
                 { sway: i * 2.1, type: TX_TYPES.base, pose: up ? "raised" : null }, "hybrid");
       // the same ring a minted coin comes out wearing: these are staked zerocoin
-      drawStakeRing(sx, sy - 2.5 - (up ? 1.2 : 0), 0.92, time, i * 2.1, fade * 0.95);
+      drawStakeMark(sx, sy - 4 - (up ? 1.2 : 0), 0.92, time, i * 2.1, fade * 0.95);
       ctx.restore();
     }
   }
@@ -2399,7 +2406,7 @@
       ctx.beginPath(); ctx.ellipse(x, y - 2*s, r, r * 0.45, 0, 0, 6.28); ctx.stroke();
       ctx.shadowBlur = 0; ctx.restore();
     }
-    if (p.minted && tp <= 0) drawStakeRing(x, y + 1.5*s, s, time, p.sway, veil * (1 - 0.5 * p.mintFlash));
+    if (p.minted && tp <= 0) drawStakeMark(x, y + 0.5*s, s, time, p.sway, veil * (1 - 0.4 * p.mintFlash));
     // A shielded walker that also wrote a plain output is carrying something anyone
     // can read, so it carries it visibly: a gold coin at its side. The creature shows
     // the most private thing it wrote, and this is the part that leaked.
