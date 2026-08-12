@@ -32,9 +32,13 @@ from the outputs):
 And one thing a transaction can **write** that changes how its Veilian looks: a
 **zerocoin mint**. Those walkers seal into a glass helmet, because the coin is being
 locked into the accumulator. The body keeps the colour of whatever it was minted
-*from*, so you can see the path: Veil advises minting out of RingCT rather than out
-of coin anyone can follow, since a mint is linkable right up to the moment it enters
-the pool.
+*from*, so you can see the path, and any tier can mint: basecoin, stealth or RingCT.
+Veil advises minting out of RingCT rather than out of coin anyone can follow, since a
+mint is linkable right up to the moment it enters the pool. On the approach to the
+ship the seal completes: the walker flares, and comes out the other side wearing a
+slow gold ring. That ring means the coin is in the pool and therefore **staking**,
+which is what a mint is for, so the staking cult wear it too. They are what a minted
+Veilian has already become.
 
 Zerocoin is easy to overlook and it is the biggest thing on the chain. It holds about
 **61% of the entire money supply** in denominations of 10, 100, 1000 and 10000, and
