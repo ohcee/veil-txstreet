@@ -76,8 +76,11 @@ if (priceAuto) { fetchPrice(); setInterval(fetchPrice, 300000); }   // refresh e
 function checkSeed(){
   if (SEED_HOST === "off"){ seedInfo = null; return; }
   dns.resolve4(SEED_HOST, (err, addrs) => {
-    seedInfo = err ? { host: SEED_HOST, up: false, count: 0 }
-                   : { host: SEED_HOST, up: (addrs || []).length > 0, count: (addrs || []).length };
+    // keep the addresses themselves: a DNS seeder exists so people can find a peer,
+    // and a bare count helps nobody who actually needs one
+    seedInfo = err ? { host: SEED_HOST, up: false, count: 0, ips: [] }
+                   : { host: SEED_HOST, up: (addrs || []).length > 0,
+                       count: (addrs || []).length, ips: (addrs || []).slice(0, 25) };
   });
 }
 
@@ -109,7 +112,8 @@ let memSampleCtr = 0;
 //   blkHist   [unixTime, secondsSincePreviousBlock]   seedable from the chain
 //   memSeries [unixTime, txInMempool]                 cannot be, no history exists
 // ---------------------------------------------------------------------------
-const HIST_WINDOW = 24 * 3600;
+const DAY = 24 * 3600, WEEK = 7 * DAY;
+const HIST_WINDOW = WEEK;                    // raw samples kept; charts slice it
 let blkHist = [], memSeries = [];
 let histFile = null, histDirty = false, histSavedAt = 0;
 function loadHist(){
@@ -138,11 +142,13 @@ function pruneHist(){
 // Average into n buckets across the whole window, so the line is a day rather
 // than the last few dozen samples. Gaps carry the previous value forward, since
 // a break in sampling is not a drop to zero.
-function bucket(series, n){
+function bucket(series, n, win){
   if (!series.length) return [];
-  const t0 = Date.now() / 1000 - HIST_WINDOW, w = HIST_WINDOW / n;
+  const W = win || HIST_WINDOW;
+  const t0 = Date.now() / 1000 - W, w = W / n;
   const sum = new Array(n).fill(0), cnt = new Array(n).fill(0);
   for (const e of series){
+    if (e[0] < t0) continue;                 // outside this view, though still stored
     let i = Math.floor((e[0] - t0) / w);
     if (i < 0) i = 0; else if (i >= n) i = n - 1;
     sum[i] += e[1]; cnt[i]++;
@@ -182,14 +188,14 @@ async function seedBlockHistory(fromHeight){
     let cur = await rpc("getblockhash", [fromHeight]);
     const found = [];
     let prev = null, walked = 0;
-    while (cur && walked < 2200){
+    while (cur && walked < 11000){
       const hd = await rpc("getblockheader", [cur]);
       if (prev != null && prev - hd.time >= 0 && prev - hd.time < 3600)
         found.push([Math.round(prev), Math.round(prev - hd.time)]);
       prev = hd.time;
       if (hd.time <= stopAt) break;
       cur = hd.previousblockhash;
-      if (++walked % 40 === 0) await new Promise(r => setTimeout(r, 150));
+      if (++walked % 40 === 0) await new Promise(r => setTimeout(r, 110));
     }
     if (found.length){
       const seen = new Set(blkHist.map(e => e[0]));
@@ -572,7 +578,8 @@ async function poll() {
       diffs: { pos: info.difficulty_pos || 0, progpow: info.difficulty_progpow || 0,
                randomx: info.difficulty_randomx || 0, sha256d: info.difficulty_sha256d || 0 },
       net: netInfo, seed: seedInfo,
-      blockGaps: bucket(blkHist, 60), memHist: bucket(memSeries, 60),
+      blockGaps: bucket(blkHist, 60, DAY), memHist: bucket(memSeries, 60, DAY),
+      blockGaps7: bucket(blkHist, 60, WEEK), memHist7: bucket(memSeries, 60, WEEK),
       histHours: { blocks: spanHours(blkHist), mem: spanHours(memSeries) },
       updated: Date.now(),
     };

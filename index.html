@@ -203,6 +203,10 @@
   .ap-spark { margin: 8px 0 2px; }
   .ap-spark span { font-size: 8px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-faint); }
   .ap-spark svg { display: block; width: 100%; height: 20px; margin-top: 2px; }
+  .hist-flip { cursor: pointer; }
+  .hist-flip:hover span { color: var(--veil-cyan); }
+  .net-link { cursor: pointer; }
+  .net-link:hover { filter: brightness(1.25); }
 
   .foot {
     position: absolute; left: 0; right: 0; bottom: 0; z-index: 8;
@@ -377,8 +381,8 @@
         <div class="sp-title">Network</div>
         <div class="sp-row">Peers <b id="ap-peers">—</b></div>
         <div class="sp-row">Seeder <b id="ap-seed">—</b></div>
-        <div class="ap-spark" title="Seconds between blocks, from their own timestamps on chain, averaged into 60 buckets across 24 hours."><span>block time · <i id="spanBlk">24h</i></span><svg id="sparkBlk" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
-        <div class="ap-spark" title="Transactions waiting in this node's mempool, sampled every minute and kept for 24 hours. No historical mempool exists to read, so this one can only grow forwards from first run."><span>mempool depth · <i id="spanMem">—</i></span><svg id="sparkMem" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
+        <div class="ap-spark hist-flip" id="histFlip" title="Seconds between blocks, from their own timestamps on chain. Click either chart to switch between the last day and the last week."><span>block time · <i id="spanBlk">24h</i></span><svg id="sparkBlk" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
+        <div class="ap-spark hist-flip" id="histFlip2" title="Transactions waiting in this node's mempool, sampled every minute. No historical mempool exists to read, so this one only grows forwards from first run. Click to switch day and week."><span>mempool depth · <i id="spanMem">—</i></span><svg id="sparkMem" viewBox="0 0 100 20" preserveAspectRatio="none"></svg></div>
       </div>
     </div>
 
@@ -1614,21 +1618,84 @@
         vector-effect="non-scaling-stroke" style="filter:drop-shadow(0 0 2px ${col})"/>
       <circle cx="${lx}" cy="${ly.toFixed(1)}" r="1.6" fill="${col}"/>`;
   }
+  // which window the two charts show. The server sends both, so flipping is free.
+  let histView = "24h";
+  function wireHistFlip(){
+    for (const id of ["histFlip", "histFlip2"]){
+      const el = document.getElementById(id);
+      if (el && !el.dataset.wired){
+        el.dataset.wired = "1";
+        el.addEventListener("click", () => { histView = histView === "24h" ? "7d" : "24h"; renderNet(); });
+      }
+    }
+    const se = document.getElementById("ap-seed");
+    if (se && !se.dataset.wired){
+      se.dataset.wired = "1";
+      se.addEventListener("click", (e) => { if (e.target.closest("[data-seedips]")) showSeedPeers(); });
+    }
+  }
+  // A DNS seeder exists so somebody stuck can find a peer. Show the addresses it is
+  // actually answering with, and the exact line to paste into veil.conf.
+  function showSeedPeers(){
+    const sd = stat.seed || {}, ips = sd.ips || [];
+    if (!ips.length) return;
+    const port = 58810;                       // mainnet p2p; the seeder only crawls mainnet
+    const offChain = stat.network && stat.network !== "main";
+    const rows = ips.map(ip => `<div class="xp-io-item" data-copy="${esc(ip)}:${port}" style="cursor:pointer"
+        title="click to copy">${esc(ip)}<span style="color:var(--text-faint)">:${port}</span></div>`).join("");
+    xpShow(`<div class="xp-head"><div><div class="xp-kicker">dns seeder</div>
+        <div class="xp-title" style="font-size:15px">${esc(sd.host || "seed")}</div></div>
+        <i class="xp-chip" style="background:${hexA("#3dff9a",0.16)};color:#3dff9a">${ips.length} LIVE</i>
+        <button class="xp-close" onclick="location.hash=''">✕</button></div>
+      <div class="xp-body">
+        <div style="margin:2px 0 0;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.55;
+          background:${hexA("#3dff9a",0.06)};border:1px solid ${hexA("#3dff9a",0.22)};color:var(--text-dim)">
+          These are the peers <b>${esc(sd.host || "the seeder")}</b> is handing out right now, resolved fresh
+          from DNS. If a wallet cannot find the network, any of these will bootstrap it.
+          ${offChain ? `<br><b>Note:</b> this seeder crawls <b>mainnet</b>, and you are looking at
+          ${esc(stat.network || "another chain")}, so these will not help a ${esc(stat.network || "")} node.` : ""}
+        </div>
+        <div class="xp-sec" style="margin-top:12px">addresses · click any to copy</div>
+        <div class="xp-io"><div style="grid-column:1/-1">${rows}</div></div>
+        <div class="xp-sec" style="margin-top:12px">or put this in veil.conf</div>
+        <div class="xp-io-item" data-copy="${esc("addnode=" + ips[0] + ":" + port)}" style="cursor:pointer"
+          title="click to copy">addnode=${esc(ips[0])}:${port}</div>
+        <div class="xp-io-item" data-copy="${esc("seednode=" + (sd.host || ""))}" style="cursor:pointer"
+          title="click to copy">seednode=${esc(sd.host || "")}</div>
+      </div>
+      <div class="xp-foot"><span style="color:var(--text-faint)">a seeder answers with peers, it is not a peer itself</span>
+        <a href="https://veil-project.com" target="_blank" rel="noopener">veil-project.com ↗</a></div>`);
+  }
   function renderNet(){
     const n = stat.net, sd = stat.seed;
     const pe = document.getElementById("ap-peers"), se = document.getElementById("ap-seed");
     if (pe) pe.innerHTML = n ? `${n.peers} <span style="color:var(--text-faint);font-weight:400">(${n.outbound}↑ ${n.inbound}↓)</span>` : "—";
-    if (se) se.innerHTML = sd ? `<span class="net-dot" style="background:${sd.up ? "#3dff9a" : "#ff4d5d"};box-shadow:0 0 5px ${sd.up ? "#3dff9a" : "#ff4d5d"}"></span>${sd.up ? sd.count + " ips" : "down"}` : "—";
-    sparkInto("sparkBlk", stat.blockGaps, "#4da3ff");
-    sparkInto("sparkMem", stat.memHist, "#22e0d6");
+    if (se){
+      const many = sd && sd.up && (sd.ips || []).length;
+      se.innerHTML = sd ? `<span class="net-dot" style="background:${sd.up ? "#3dff9a" : "#ff4d5d"};box-shadow:0 0 5px ${sd.up ? "#3dff9a" : "#ff4d5d"}"></span>${
+        sd.up ? `<span class="${many ? "net-link" : ""}" ${many ? 'data-seedips="1" title="show the addresses this seeder is handing out"' : ""}>${sd.count} ips${many ? " ↗" : ""}</span>` : "down"}` : "—";
+    }
+    const wk = histView === "7d";
+    sparkInto("sparkBlk", wk ? stat.blockGaps7 : stat.blockGaps, "#4da3ff");
+    sparkInto("sparkMem", wk ? stat.memHist7 : stat.memHist, "#22e0d6");
     // say how much of the day each line actually covers. The block series is
     // seeded from the chain so it fills in minutes; the mempool one cannot be,
     // and has to earn its 24h by running.
     const hh = stat.histHours || {};
-    const span = h => h == null ? "—" : h >= 23.5 ? "24h" : h >= 1 ? h.toFixed(0) + "h" : Math.round(h * 60) + "m";
+    // never claim a window the data does not fill: a chart asked for a week that
+    // only holds two days says 2d, not 7d
+    const span = h => {
+      if (h == null) return "—";
+      const cap = wk ? 168 : 24;
+      const v = Math.min(h, cap);
+      if (v >= cap - 0.5) return wk ? "7d" : "24h";
+      if (v >= 48) return Math.round(v / 24) + "d";
+      return v >= 1 ? v.toFixed(0) + "h" : Math.round(v * 60) + "m";
+    };
     const sb = document.getElementById("spanBlk"), sm = document.getElementById("spanMem");
     if (sb) sb.textContent = span(hh.blocks);
     if (sm) sm.textContent = span(hh.mem);
+    wireHistFlip();
   }
   // The algorithm mix as a glowing alien eye: a squashed donut whose arcs are the share
   // of blocks each algo won, with its difficulty listed beside it.
@@ -2934,6 +3001,8 @@
     if (s.histHours) stat.histHours = s.histHours;
     if (s.blockGaps) stat.blockGaps = s.blockGaps;
     if (s.memHist) stat.memHist = s.memHist;
+    if (s.blockGaps7) stat.blockGaps7 = s.blockGaps7;
+    if (s.memHist7) stat.memHist7 = s.memHist7;
     if (typeof s.usd === "number"){ const had = stat.usd>0; stat.usd = s.usd; if (!had && stat.usd>0) renderTxList(); }   // re-price fees once known
     if (el.chainNet) el.chainNet.textContent = (s.network==="mock" ? "mock feed" : (s.network||"mainnet")) + " · privacy L1";
     if (feedMode === "live"){
