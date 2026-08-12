@@ -35,13 +35,12 @@ locked into the accumulator. The body keeps the colour of whatever it was minted
 *from*, so you can see the path, and any tier can mint: basecoin, stealth or RingCT.
 Veil advises minting out of RingCT rather than out of coin anyone can follow, since a
 mint is linkable right up to the moment it enters the pool. On the approach to the
-ship the seal completes: the walker flares, and comes out the other side wearing a
-gold **sash**. That sash means the coin is in the pool and therefore **staking**,
-which is what a mint is for, so the staking cult wear it too. They are what a minted
-Veilian has already become. Deliberately not a ring: "ring" already means the RingCT
-ring signature here, and wearing one to mean something else would read as the wrong
-claim. The sash sits across the chest and leaves the body tint showing, so you can
-still see which tier the coin was minted from.
+ship the seal completes: the walker flares as the coin locks into the accumulator.
+No badge is worn afterwards, and that is deliberate. Two things already answer the
+two questions worth asking, colour for what a transaction wrote and the door for what
+it spent, and hanging a third worn mark on a Veilian to say "staking now" only
+repeats what the mint already showed. It also drifts towards the ring-and-halo look
+every other coin visualiser reaches for.
 
 Zerocoin is easy to overlook and it is the biggest thing on the chain. It holds about
 **61% of the entire money supply** in denominations of 10, 100, 1000 and 10000, and
