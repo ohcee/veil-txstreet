@@ -321,7 +321,10 @@
   .xp-nav button:hover:not(:disabled) { color: var(--text); border-color: var(--veil-cyan); }
   .xp-nav button:disabled { opacity: 0.3; cursor: default; }
   .xp-foot { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
-    display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-faint); }
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    font-size: 10px; color: var(--text-faint); flex-wrap: wrap; }
+  .xp-foot > span { min-width: 0; }              /* or a long note overflows and clips */
+  .xp-foot > a { flex: 0 0 auto; }
   .xp-foot a { color: var(--text-dim); text-decoration: none; }
   .xp-foot a:hover { color: var(--veil-cyan); }
   .xp-load { padding: 40px; text-align: center; color: var(--text-dim); font-size: 12px; letter-spacing: 1px; }
@@ -1636,9 +1639,15 @@
   }
   // A DNS seeder exists so somebody stuck can find a peer. Show the addresses it is
   // actually answering with, and the exact line to paste into veil.conf.
-  function showSeedPeers(){
+  function showSeedPeers(){ location.hash = "/seeder"; }
+  function renderSeedPeers(){
     const sd = stat.seed || {}, ips = sd.ips || [];
-    if (!ips.length) return;
+    // opened straight from a link, before the first poll has told us anything
+    if (!ips.length) return xpShow(`<div class="xp-head"><div><div class="xp-kicker">dns seeder</div>
+      <div class="xp-title" style="font-size:15px">${esc(sd.host || "seed.veil-info.org")}</div></div>
+      <button class="xp-close" onclick="veilClose()">✕</button></div>
+      <div class="xp-body"><div class="xp-load">${sd.up === false ? "the seeder is not answering right now"
+        : "asking the seeder for peers…"}</div></div>`);
     const port = 58810;                       // mainnet p2p; the seeder only crawls mainnet
     const offChain = stat.network && stat.network !== "main";
     const rows = ips.map(ip => `<div class="xp-io-item" data-copy="${esc(ip)}:${port}" style="cursor:pointer"
@@ -1646,7 +1655,7 @@
     xpShow(`<div class="xp-head"><div><div class="xp-kicker">dns seeder</div>
         <div class="xp-title" style="font-size:15px">${esc(sd.host || "seed")}</div></div>
         <i class="xp-chip" style="background:${hexA("#3dff9a",0.16)};color:#3dff9a">${ips.length} LIVE</i>
-        <button class="xp-close" onclick="location.hash=''">✕</button></div>
+        <button class="xp-close" onclick="veilClose()">✕</button></div>
       <div class="xp-body">
         <div style="margin:2px 0 0;padding:8px 10px;border-radius:6px;font-size:11px;line-height:1.55;
           background:${hexA("#3dff9a",0.06)};border:1px solid ${hexA("#3dff9a",0.22)};color:var(--text-dim)">
@@ -1662,9 +1671,9 @@
           title="click to copy">addnode=${esc(ips[0])}:${port}</div>
         <div class="xp-io-item" data-copy="${esc("seednode=" + (sd.host || ""))}" style="cursor:pointer"
           title="click to copy">seednode=${esc(sd.host || "")}</div>
-      </div>
-      <div class="xp-foot"><span style="color:var(--text-faint)">a seeder answers with peers, it is not a peer itself</span>
-        <a href="https://veil-project.com" target="_blank" rel="noopener">veil-project.com ↗</a></div>`);
+        <div class="xp-foot"><span>a seeder answers with peers, it is not a peer itself</span>
+          <a href="https://veil-project.com" target="_blank" rel="noopener">veil-project.com ↗</a></div>
+      </div>`);
   }
   function renderNet(){
     const n = stat.net, sd = stat.seed;
@@ -3003,6 +3012,9 @@
     if (s.memHist) stat.memHist = s.memHist;
     if (s.blockGaps7) stat.blockGaps7 = s.blockGaps7;
     if (s.memHist7) stat.memHist7 = s.memHist7;
+    // someone deep-linked to the seeder card before the first poll answered: it drew
+    // the waiting state and nothing would ever replace it, so redraw once we know
+    if (location.hash === "#/seeder" && (stat.seed && (stat.seed.ips || []).length)) renderSeedPeers();
     if (typeof s.usd === "number"){ const had = stat.usd>0; stat.usd = s.usd; if (!had && stat.usd>0) renderTxList(); }   // re-price fees once known
     if (el.chainNet) el.chainNet.textContent = (s.network==="mock" ? "mock feed" : (s.network||"mainnet")) + " · privacy L1";
     if (feedMode === "live"){
@@ -3203,10 +3215,14 @@
     if (ad){ xpOpenAddr(ad.getAttribute("data-goaddr")); return; }
   });
   function xpShow(html){ xpCard.innerHTML = html; xpEl.classList.add("open"); xpEl.scrollTop = 0; }
+  // the ✕ is inline HTML, so it runs in global scope and cannot see xpClose. It used
+  // to just blank the hash, which does nothing at all on a card that was never routed
+  // through one: no hashchange fires, so the overlay never closed.
+  window.veilClose = () => xpClose();
   function xpFail(kind, msg){
     xpShow(`<div class="xp-head"><div><div class="xp-kicker">${esc(kind)}</div>
       <div class="xp-title">not found</div></div>
-      <button class="xp-close" onclick="location.hash=''">✕</button></div>
+      <button class="xp-close" onclick="veilClose()">✕</button></div>
       <div class="xp-body"><div class="xp-load">${esc(msg)}</div></div>`);
   }
   const xpAgo = (t) => { const d = Math.max(0, Date.now()/1000 - t);
@@ -3239,7 +3255,7 @@
           <button ${d.prev ? `data-goblock="${esc(d.prev)}"` : "disabled"} title="previous block">‹</button>
           <button ${d.next ? `data-goblock="${esc(d.next)}"` : "disabled"} title="next block">›</button>
         </div>
-        <button class="xp-close" onclick="location.hash=''">✕</button>
+        <button class="xp-close" onclick="veilClose()">✕</button>
       </div>
       <div class="xp-body">
         <div class="xp-hash" data-copy="${esc(d.hash)}" title="copy block hash">${esc(d.hash)}</div>
@@ -3368,7 +3384,7 @@
         <div class="xp-title" style="font-size:14px">${esc(short(id, 16, 12))}</div></div>
         <i class="xp-chip" style="background:${hexA(tt.color,0.18)};color:${tt.color}"
            title="${esc(ringNote.title)}">${esc(tt.name)}${esc(ringNote.suffix)}</i>
-        <button class="xp-close" onclick="location.hash=''">✕</button>
+        <button class="xp-close" onclick="veilClose()">✕</button>
       </div>
       <div class="xp-body">
         <div class="xp-hash" data-copy="${esc(id)}" title="copy txid">${esc(id)}</div>
@@ -3407,7 +3423,7 @@
       <div class="xp-head">
         <div><div class="xp-kicker">transparent address</div>
         <div class="xp-title" style="font-size:14px">${esc(short(id, 14, 10))}</div></div>${lbl}
-        <button class="xp-close" onclick="location.hash=''">✕</button>
+        <button class="xp-close" onclick="veilClose()">✕</button>
       </div>
       <div class="xp-body">
         <div class="xp-hash" data-copy="${esc(id)}" title="copy address">${esc(id)}</div>
@@ -3423,6 +3439,7 @@
       </div>`);
   }
   function routeXp(){
+    if (/^#\/seeder$/.test(location.hash)) return renderSeedPeers();
     const m = location.hash.match(/^#\/(block|tx|address)\/([^@]+)(?:@(.+))?$/);
     if (!m){ xpEl.classList.remove("open"); return; }
     if (m[1] === "block") xpRenderBlock(m[2]);

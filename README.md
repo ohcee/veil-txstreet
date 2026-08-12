@@ -263,15 +263,23 @@ All optional. Env var overrides `config.json` overrides the built-in default.
   and drops the bush field, the gantry and the floating debris. The ship carries
   only how the block was won and which block, since four lines of text on a 90px
   hull is a smudge. Open it from another device via the LAN URL `start.sh` prints.
-- **A day of history.** Both sparklines cover a rolling 24h, averaged into 60
-  buckets, and persist to `block-hist.json` (per chain, gitignored) so a restart
-  resumes instead of starting over. Block spacing can be *seeded from the chain*:
-  on first run the server walks about 1,400 headers backwards in the background,
-  which fills 24h in seconds and never holds up the first pageview, so the chart
-  opens full. Mempool depth cannot be, because no historical mempool exists to read
-  anywhere. It samples once a minute and grows forwards from first run, and the
-  label says how much it actually has (`12m`, `6h`, `24h`) rather than implying a
-  full day.
+- **A week of history.** Click either sparkline to switch between the last **24h**
+  and the last **7d**; both windows come down in the same response, so the flip is
+  instant. Samples persist to `block-hist.json` (per chain, gitignored) so a restart
+  resumes instead of starting over. Block spacing is *seeded from the chain*: on
+  first run the server walks about 10,000 headers backwards in the background, which
+  fills the whole week in roughly two minutes and never holds up the first pageview.
+  Mempool depth cannot be seeded, because no historical mempool exists to read
+  anywhere; it samples once a minute and grows forwards from first run. Neither chart
+  claims a window it has not got, so asking a two day old series for a week reads
+  `2d`.
+- **The seeder is clickable.** The network panel's seeder row opens the addresses
+  `seed.veil-info.org` is currently answering with, click any to copy, plus ready
+  made `addnode=` and `seednode=` lines for `veil.conf`. It is a real route
+  (`#/seeder`), so the close button, browser back and deep links all work. A DNS
+  seeder exists so somebody who cannot find the network can find a peer, and a bare
+  count helps nobody who actually needs one. On testnet the card says outright that
+  this seeder crawls mainnet and will not help there.
 - USD figures come from the mainnet market price. Set `VEIL_NO_USD=1` (as the live
   testnet mirror does) to drop them, since testnet coins have no market value.
 - Rejection is honest: a transaction that boards but isn't in the found block steps
