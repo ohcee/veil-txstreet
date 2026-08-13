@@ -264,6 +264,34 @@ All optional. Env var overrides `config.json` overrides the built-in default.
 - `veil-mark.svg` — the Veil brand mark (from the official presskit), used on the ship
   and worn as the "V" on every Veilian's face.
 
+## Tests
+
+```bash
+npm test
+```
+
+Twenty cases over the pure functions that decide **what a transaction is**, run with
+node's built in runner. No dependencies, no network, no node required: the fixtures
+are output shapes copied verbatim from real `getblock` and `getrawtransaction`
+results on mainnet.
+
+Those functions are where every expensive bug in this project has lived, because a
+wrong answer there is a wrong claim about somebody's privacy, drawn on screen as
+fact. Most cases are regressions that actually shipped:
+
+* a blinded (CT) output carries **both** its own `type` and an ordinary `pubkeyhash`
+  script, so reading the script first reported every CT output as transparent
+* a zerocoin mint says `type: "standard"` and only admits `zerocoinmint` in the
+  `scriptPubKey`, so checking `v.type` alone made the most common output invisible
+* a ring on any input but the first was missed by `vin[0].type === "anon"`
+* ring members are outputs, so deduping them by txid undercounted the ring
+* a zerocoin spend's null outpoint still has a `txid` field, so a naive prevout
+  lookup chased 64 zeros and failed every time
+* a mint counted as a "public payment" flagged every mint as leaked change
+
+Each was verified by putting the bug back and watching the named case fail. `server.js`
+starts nothing when it is required, so the suite imports it directly.
+
 ## Notes
 
 - The **Stats** panel is where the scene explains itself: a line on each coin type,

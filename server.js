@@ -21,6 +21,9 @@
  *   MOCK_BLOCK_MS   mock block interval (default 60000)
  */
 "use strict";
+// Required as a module (by the tests) this file must not start a server, open
+// sockets or set timers; run directly it behaves exactly as before.
+const IS_MAIN = require.main === module;
 const http = require("http");
 const https = require("https");
 const fs = require("fs");
@@ -72,7 +75,7 @@ function fetchPrice() {
     } catch (_) {} });
   }).on("error", () => {}).on("timeout", function () { this.destroy(); });
 }
-if (priceAuto) { fetchPrice(); setInterval(fetchPrice, 300000); }   // refresh every 5 min
+if (IS_MAIN && priceAuto) { fetchPrice(); setInterval(fetchPrice, 300000); }   // refresh every 5 min
 function checkSeed(){
   if (SEED_HOST === "off"){ seedInfo = null; return; }
   dns.resolve4(SEED_HOST, (err, addrs) => {
@@ -212,7 +215,7 @@ function addBlockSample(t, gap){
   blkHist.push([Math.round(t), Math.round(gap)]);
   histDirty = true;
 }
-checkSeed(); setInterval(checkSeed, 120000);   // seeder liveness, after SEED_HOST exists
+if (IS_MAIN){ checkSeed(); setInterval(checkSeed, 120000); }   // seeder liveness, after SEED_HOST exists
 
 for (const sig of ["SIGINT", "SIGTERM"])
   process.on(sig, () => { try { saveHist(true); } catch (_) {} process.exit(0); });
@@ -354,8 +357,10 @@ function kindOfVout(v){
 // guaranteed RPC failure, so recognise them before spending a lookup on it.
 const NULL_TXID = /^0{64}$/;
 function realPrevout(v){
-  return v.txid && !NULL_TXID.test(v.txid) &&
-         (v["vout.n"] != null ? v["vout.n"] : v.vout) !== 0xffffffff;
+  // a predicate should answer true or false, not undefined: a coinbase vin has
+  // no txid at all, and `v.txid &&` was handing back undefined for it
+  return !!(v.txid && !NULL_TXID.test(v.txid) &&
+            (v["vout.n"] != null ? v["vout.n"] : v.vout) !== 0xffffffff);
 }
 let kindLookups = 0;                             // budget, reset each poll
 async function sourceKind(tx, force){
@@ -1107,6 +1112,19 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Exports for the tests. These are the pure functions that decide what a
+// transaction IS, which is where every expensive bug in this project has lived:
+// a wrong answer here is a wrong claim about somebody's privacy, drawn as fact.
+// ---------------------------------------------------------------------------
+module.exports = {
+  classify, heuristicType, spendsRing, firstRingSize, ringSizes,
+  writesMint, mintTotal, mintOuts, writesMixed,
+  voutKind, voutIndex, kindOfVout, realPrevout,
+  shapeVin, shapeVout, summarizeTx, detectAlgo,
+  bucket, spanHours, isSuperblock, SUPERBLOCK_INTERVAL,
+};
+
 server.on("error", (e) => {
   if (e.code === "EADDRINUSE") {
     console.error(`\n  Port ${CFG.port} is already in use — VeilStreet may already be running there.`);
@@ -1115,7 +1133,7 @@ server.on("error", (e) => {
   }
   throw e;
 });
-server.listen(CFG.port, CFG.host, () => {
+if (IS_MAIN) server.listen(CFG.port, CFG.host, () => {
   console.log(`\n  VeilStreet  →  http://${CFG.host === "0.0.0.0" ? "localhost" : CFG.host}:${CFG.port}`);
   console.log(`  feed: ${CFG.feed.toUpperCase()}` + (CFG.feed === "rpc" ? `  (veild ${CFG.rpcHost}:${CFG.rpcPort || "auto-detect"})` : "") + "\n");
   if (CFG.feed === "mock") startMock();
