@@ -73,8 +73,9 @@ About half of Veil's blocks are staked, not mined, and staking is holding: at th
 **STAKING CULT** in the lower bushes three hodlers stand in a circle around a
 spinning Veil coin doing nothing, which is the whole practice. When a stake wins,
 the chosen one raises their arms and ascends in green stardust the same way. The
-faithful are drawn as RingCT beings, following Veil's guidance to mint from RingCT
-now that zerocoin's own privacy is broken. Worth being straight about which part of
+faithful are drawn as RingCT beings wearing the same sealed helmet a mint comes out
+with, because that is exactly what they are: RingCT minted into the pool, following
+Veil's guidance to mint from RingCT now that zerocoin's own privacy is broken. Worth being straight about which part of
 that is chain and which is guidance: what a staker holds and spends is **zerocoin**,
 in every coinstake on the chain, and once minted, where it came from is unknowable
 by design. The magenta is the recommended provenance, not something the chain shows. The one
