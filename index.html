@@ -382,6 +382,9 @@
     </div>
   </div>
 </noscript>
+<div id="walkTip" style="position:fixed;z-index:55;display:none;pointer-events:none;max-width:270px;
+  background:rgba(11,7,24,0.96);border:1px solid #2a2044;border-radius:9px;padding:9px 11px;
+  box-shadow:0 10px 34px rgba(0,0,0,0.6);font:11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:#cbc2ec"></div>
 <div id="app">
   <nav>
     <div class="brand">
@@ -1496,7 +1499,7 @@
     // ringIn: does it actually SPEND RingCT (a ring signature, an anonymity set),
     // or does it only create hidden outputs? Undefined when the node never told us.
     return { id: txSeq, hash: d.hash || rndHex(64), type: typeKey, typeName: TX_TYPES[typeKey].name,
-      ringIn: d.ringIn, src: d.src, mixed: d.mixed, mint: d.mint, mintValue: d.mintValue,
+      ringIn: d.ringIn, src: d.src, mixed: d.mixed, mint: d.mint, mintValue: d.mintValue, ringSize: d.ringSize,
       vsize: d.vsize || 500, fee: d.fee || 0, addr, t: Date.now() };
   }
   const txListEl = document.getElementById("txList");
@@ -2970,6 +2973,51 @@
   document.getElementById("statsChip").addEventListener("click", () => statsPop.classList.toggle("open"));
 
   // canvas click -> inspect nearest person
+  // Hover a walker and read it. Every one of these was already clickable through to
+  // its full transaction page, but nothing on screen said so, so the audit trail the
+  // whole scene is built on was invisible unless you happened to click a moving dot.
+  const tipEl = document.getElementById("walkTip");
+  function walkerAt(mx, my){
+    let best = null, bd = 26;
+    for (const p of people){
+      if (p.state !== "walking" || p.miner) continue;
+      if (veilCover(p.x, p.y) <= 0) continue;      // under the cloth it is not there to be read
+      const d = Math.hypot(p.x - mx, p.y - my - 4);
+      if (d < bd){ bd = d; best = p; }
+    }
+    return best;
+  }
+  const SRC_WORD = { base: "a plain output, public", stealth: "a blinded (CT) output",
+                     ring: "a ring, source unpinnable", zerocoin: "zerocoin, no outpoint to trace" };
+  function showWalkTip(p, cx, cy){
+    const t = p.tx, ty = p.type;
+    const rows = [];
+    rows.push(`<div style="color:${ty.color};font-weight:800;letter-spacing:0.5px">${esc(ty.name.toUpperCase())}${
+      t.type === "ringct" && t.ringIn === false ? " OUT" : ""}${t.mint ? " · MINT" : ""}</div>`);
+    if (t.hash) rows.push(`<div style="color:#8b83ad">${esc(short(t.hash, 10, 8))}</div>`);
+    rows.push(`<div style="margin-top:6px">wrote <b style="color:#e9e2ff">${esc(ty.name.toLowerCase())} outputs</b></div>`);
+    rows.push(`<div>spent <b style="color:#e9e2ff">${esc(SRC_WORD[t.src] || "not resolved")}</b></div>`);
+    if (t.ringSize) rows.push(`<div>ring size <b style="color:#d64bff">${esc(String(t.ringSize))}</b> · one real spend among them</div>`);
+    if (t.mint && t.mintValue) rows.push(`<div>minting <b style="color:#ffcf5a">${esc(t.mintValue.toLocaleString())} VEIL</b> into the pool, denomination public</div>`);
+    if (t.mixed) rows.push(`<div style="color:#ffcf5a">also paid out in the clear</div>`);
+    rows.push(`<div style="margin-top:6px;color:#8b83ad">${esc(fmtSize(t.vsize))} · fee ${esc(fmtFeeShort(t.fee))}</div>`);
+    rows.push(`<div style="color:#6b628f">click to open the full transaction</div>`);
+    tipEl.innerHTML = rows.join("");
+    tipEl.style.display = "block";
+    const r = tipEl.getBoundingClientRect();
+    let x = cx + 16, y = cy + 14;
+    if (x + r.width > innerWidth - 8) x = cx - r.width - 16;
+    if (y + r.height > innerHeight - 8) y = cy - r.height - 14;
+    tipEl.style.left = Math.max(8, x) + "px";
+    tipEl.style.top = Math.max(8, y) + "px";
+  }
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const p = walkerAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (p){ showWalkTip(p, e.clientX, e.clientY); canvas.style.cursor = "pointer"; }
+    else { tipEl.style.display = "none"; canvas.style.cursor = ""; }
+  });
+  canvas.addEventListener("mouseleave", () => { tipEl.style.display = "none"; canvas.style.cursor = ""; });
   canvas.addEventListener("click", (e) => {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX-rect.left, my = e.clientY-rect.top;
@@ -3092,7 +3140,7 @@
     if (mempoolSet.has(ev.txid)) return;
     mempoolSet.add(ev.txid);
     const walking = people.reduce((a,p)=>a+(p.state==="walking"?1:0),0);
-    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid, ringIn: ev.ringIn, src: ev.src, mixed: ev.mixed, mint: ev.mint, mintValue: ev.mintValue };
+    const d = { type: ev.type, vsize: ev.vsize, fee: ev.fee, hash: ev.txid, ringIn: ev.ringIn, src: ev.src, mixed: ev.mixed, mint: ev.mint, mintValue: ev.mintValue, ringSize: ev.ringSize };
     if (walking < 100) addPerson(d);          // animate it walking the street
     else addTxToFeed(makeTxFromData(d));       // burst overflow: list only
   }
@@ -3123,7 +3171,7 @@
       const row = recentTx.find(t => t.hash === m.txid);
       const walking = people.some(p => p.tx && p.tx.hash === m.txid);
       if (row && !walking) addPerson({ reuseTx: row });                  // row survived, walker didn't
-      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid, ringIn: m.ringIn, src: m.src, mixed: m.mixed, mint: m.mint, mintValue: m.mintValue });
+      else if (!row) addPerson({ type: m.type, vsize: m.vsize, fee: m.fee, hash: m.txid, ringIn: m.ringIn, src: m.src, mixed: m.mixed, mint: m.mint, mintValue: m.mintValue, ringSize: m.ringSize });
     }
     // and the other direction: still shown as pending here, gone from the node
     // there — evicted, or confirmed in a moment we missed. These used to linger
@@ -3209,6 +3257,7 @@
       // when the newest coin it still holds arrived. scantxoutset only returns
       // UNSPENT outputs, so a spend deletes its own trace: this dates the last
       // time the address RECEIVED, which is the most the UTXO set can tell us.
+      const pct = d.supply > 0 ? (x.amount / d.supply) * 100 : 0;
       const seen = x.lastTime ? snitchAge(x.lastTime) : "";
       const seenTitle = x.lastTime
         ? `last received ${new Date(x.lastTime * 1000).toLocaleDateString()} · block ${x.lastHeight.toLocaleString()}. Spends leave no trace in the UTXO set, so this is when coin last arrived, not when it last moved.`
@@ -3216,7 +3265,9 @@
       return `<div class="snitch-row">
         <span class="snitch-rank">${i+1}</span>
         <span class="snitch-addr" data-addr="${x.addr}" title="${x.addr} · ${x.outs} outputs">${short(x.addr, 7, 5)}${tag}</span>
-        <span class="snitch-amt">${fmtVeil(x.amount)} VEIL${usd > 0 ? `<span>${fmtUsd(usd)}</span>` : ""}${
+        <span class="snitch-amt">${fmtVeil(x.amount)} VEIL${
+          pct >= 0.01 ? `<span title="share of the ${Math.round(d.supply).toLocaleString()} VEIL in circulation">${pct >= 1 ? pct.toFixed(1) : pct.toFixed(2)}% of supply</span>` : ""}${
+          usd > 0 ? `<span>${fmtUsd(usd)}</span>` : ""}${
           seen ? `<span class="snitch-seen" title="${seenTitle}">in ${seen}</span>` : ""}</span>
       </div>`;
     }).join("");

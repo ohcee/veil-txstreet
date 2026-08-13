@@ -102,6 +102,7 @@ let netInfo = null;                          // peer count / versions from getpe
 let seedInfo = null;                         // DNS seeder liveness (seed.veil-info.org)
 const SEED_HOST = process.env.VEIL_SEED_HOST || fileCfg.seedHost || "seed.veil-info.org";
 let lastArrival = null;
+let moneySupply = 0;                         // circulating VEIL, for the snitch shares
 let prevBlockTime = null;                    // previous block's own timestamp
 let memSampleCtr = 0;
 
@@ -383,6 +384,10 @@ async function sourceKind(tx, force){
     return mine;
   } catch (_) { return null; }
 }
+function firstRingSize(tx) {
+  const v = (tx.vin || []).find(x => x.type === "anon");
+  return v && v.ring_size != null ? v.ring_size : null;
+}
 function ringSizes(tx) {
   return (tx.vin || []).filter(v => v.type === "anon")
                        .map(v => v.ring_size).filter(n => n != null);
@@ -426,7 +431,8 @@ function pumpTx() {
     rpc("getrawtransaction", [txid, true])
       .then(async tx => { const t = classify(tx), ri = spendsRing(tx), src = await sourceKind(tx),
                           mx = writesMixed(tx), mint = writesMint(tx), mv = mint ? mintTotal(tx) : 0;
-                    const ev = { txid, vsize, fee, type: t, time, ringIn: ri, src, mixed: mx, mint, mintValue: mv };
+                    const ev = { txid, vsize, fee, type: t, time, ringIn: ri, src, mixed: mx, mint, mintValue: mv,
+                                 ringSize: ri ? firstRingSize(tx) : null };
                     memNow.set(txid, ev);
                     push({ kind: "tx", ...ev }); })
       .catch(() => { const t = heuristicType(vsize); memNow.set(txid, { txid, vsize, fee, type: t, time });
@@ -483,6 +489,9 @@ async function poll() {
       pruneHist(); histDirty = true; saveHist();
     }
     const height = info.blocks;
+    if (typeof info.moneysupply === "number" || info.moneysupply_formatted)
+      moneySupply = parseFloat(info.moneysupply_formatted) ||
+                    (typeof info.moneysupply === "number" ? info.moneysupply / 1e8 : 0);
     // Veil ships a chain-wide algo/timing summary — a far better average than timing
     // arrivals ourselves (that measure drifts with poll latency and closed tabs)
     let algoStats = null;
@@ -542,6 +551,7 @@ async function poll() {
               if (full) push({ kind: "tx", txid: tid, vsize: tx.vsize || tx.size || 500, fee: 0,
                                type: classify(tx), ringIn: spendsRing(tx), src: await sourceKind(tx),
                                mixed: writesMixed(tx), mint: writesMint(tx), mintValue: writesMint(tx) ? mintTotal(tx) : 0,
+                               ringSize: spendsRing(tx) ? firstRingSize(tx) : null,
                                time: blk.time || Date.now() / 1000 });
               else push({ kind: "tx", txid: tid, vsize: 800, fee: 0, type: heuristicType(800), time: blk.time || Date.now() / 1000 });
             }
@@ -1080,7 +1090,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" });
     res.end(JSON.stringify({ list: snitchList, seen: snitchSeen.size, priced: snitchScanned,
                              updated: snitchAt, scanning: snitchScanning,
-                             backfillAt, usd: usdPrice }));
+                             backfillAt, usd: usdPrice, supply: moneySupply }));
     return;
   }
   // static

@@ -173,8 +173,11 @@ rpcallowip=127.0.0.1
 Copy `config.example.json` → `config.json` with your credentials, or pass them as env
 vars.
 
-Clicking any block or transaction in the feed, the recent-blocks strip, or the scene
-itself opens **its own data page in-app**, served off your node: block pages with
+**Hover any walker** and it tells you what it is: what it wrote, what it spent, its
+ring size if it spent a ring, the denomination if it is minting, whether it also paid
+out in the clear, its vSize and fee. That is the whole separation this thing is built
+on, readable one walker at a time. Clicking any block or transaction in the feed, the
+recent-blocks strip, or the scene itself opens **its own data page in-app**, served off your node: block pages with
 header fields, per-algo detail and the tx list; transaction pages with type, ring size,
 commitments, and the RingCT fee (which Veil keeps in the clear even when amounts are
 hidden); and address pages with the transparent balance, its USD value, and the top
