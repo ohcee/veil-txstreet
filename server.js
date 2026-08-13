@@ -38,7 +38,12 @@ const CFG = {
   // how far back to walk once, seeding the list. Wider finds older (dormant) holders
   // but grows the set that gets re-priced, so raise SNITCH_BATCH / SNITCH_EVERY_MS with it.
   snitchBackfill: +(process.env.SNITCH_BACKFILL || fileCfg.snitchBackfill || 20000),
-  snitchEveryMs: +(process.env.SNITCH_EVERY_MS || fileCfg.snitchEveryMs || 90000),   // re-price cadence
+  // Re-pricing means a full UTXO scan per batch, and it competes with the address
+  // page for the same call. Measured on mainnet: ~70s to price 81k addresses, so at
+  // the old 90s cadence the node scanned almost continuously. Hourly puts that near
+  // 2% duty, and costs nothing real: the largest balances on this chain last moved
+  // 13, 16 and 260 days ago.
+  snitchEveryMs: +(process.env.SNITCH_EVERY_MS || fileCfg.snitchEveryMs || 3600000),
   port: +(process.env.PORT || fileCfg.port || 8790),
   host: process.env.BIND || fileCfg.host || "0.0.0.0",   // set BIND=127.0.0.1 behind a proxy
   feed: (process.env.FEED || fileCfg.feed || "rpc").toLowerCase(),
@@ -718,7 +723,10 @@ const SNITCH_LABELS = Object.assign({}, labelFile, fileCfg.snitchLabels || {});
 // descriptors per scantxoutset pass. Scan time is dominated by walking the UTXO set,
 // not the descriptor count (measured: 600 and 10k cost the same ~3s), so bigger
 // batches mean fewer scans for the same coverage.
-const SNITCH_BATCH = +(process.env.SNITCH_BATCH || fileCfg.snitchBatch || 600);
+// scantxoutset cost is dominated by walking the UTXO set, not by how many
+// descriptors it is matching: 600 descriptors and 10,000 both measured ~3s. So a
+// big batch is nearly free and a small one multiplies the expensive part.
+const SNITCH_BATCH = +(process.env.SNITCH_BATCH || fileCfg.snitchBatch || 4000);
 
 // The node runs at most ONE scantxoutset at a time ("Scan already in progress"), so
 // every scan in the process — the snitch ranker's batches and the address pages —

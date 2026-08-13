@@ -219,6 +219,12 @@ Veil's treasury, not somebody's stash); name pools and services in
 `snitch-labels.json`. The harvest persists per chain (`snitch-addrs.json` for mainnet,
 `snitch-addrs-<port>.json` otherwise) and is gitignored.
 
+Balances are **re-priced hourly, not live**, and the panel says how old they are
+("priced 12m ago"). Pricing means a full UTXO scan per batch, sharing the one call the
+address page also needs, so doing it continuously spent about a quarter of the node's
+time keeping ten numbers fresh. An hour of staleness is not a fact anyone could act on
+differently when the balances in question last moved a fortnight ago.
+
 ### Superblocks
 
 Veil pays its budget on a superblock every **43,200 blocks** (~monthly). There's no
@@ -247,8 +253,8 @@ All optional. Env var overrides `config.json` overrides the built-in default.
 | `VEIL_MARKET` | `veilMarket` | `VEIL_USDT` | NonKYC market for the auto price |
 | `VEIL_NO_USD` | `noUsd` | `false` | drop all USD figures (the live testnet mirror sets this) |
 | `SNITCH_BACKFILL` | `snitchBackfill` | `20000` | blocks to walk back harvesting snitch addresses; wider catches older dormant holders |
-| `SNITCH_BATCH` | `snitchBatch` | `600` | addresses per `scantxoutset` pass; scan cost barely depends on this, so bigger = fewer scans |
-| `SNITCH_EVERY_MS` | `snitchEveryMs` | `90000` | how often the harvested set is re-priced |
+| `SNITCH_BATCH` | `snitchBatch` | `4000` | addresses per `scantxoutset` pass; scan cost is dominated by walking the UTXO set, not descriptor count (600 and 10,000 both ~3s), so bigger = far fewer scans |
+| `SNITCH_EVERY_MS` | `snitchEveryMs` | `3600000` | how often the harvested set is re-priced. Hourly on purpose: a pass is ~70s of full UTXO scanning for 81k addresses and competes with the address page, and the largest balances here last moved 13, 16 and 260 days ago. The panel shows how stale the figures are |
 | — | `snitchLabels` | — | extra `{ "<address>": "name" }` labels for the Snitch List |
 
 ---

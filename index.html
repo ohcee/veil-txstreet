@@ -3245,7 +3245,16 @@
     const sub = document.getElementById("snitchSub"), rows = document.getElementById("snitchRows");
     if (!sub || !rows) return;
     const list = d.list || [];
-    sub.textContent = list.length ? `top ${Math.min(10, list.length)} exposed` : (d.scanning ? "scanning…" : "watching…");
+    // These balances are re-priced hourly, not live, so the panel says how old they
+    // are rather than letting a stale number pass for a current one.
+    const age = d.updated ? Math.round((Date.now() - d.updated) / 60000) : null;
+    const when = d.scanning ? "pricing now"
+               : age == null ? ""
+               : age < 1 ? "just priced"
+               : age < 90 ? `priced ${age}m ago`
+               : `priced ${Math.round(age / 60)}h ago`;
+    sub.textContent = list.length ? `top ${Math.min(10, list.length)} exposed${when ? " · " + when : ""}`
+                                  : (d.scanning ? "scanning…" : "watching…");
     if (!list.length){
       rows.innerHTML = `<div class="snitch-note">Nothing transparent caught yet — the node is still watching.</div>`;
       return;
