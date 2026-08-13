@@ -400,6 +400,19 @@
         so nobody can draw them. The one exception is a <b>zerocoin mint</b>, whose denomination is
         public: those walkers wear a sealed helmet and are sized by the amount they minted, 10 through
         10000, with the figure printed above them. Walking speed = fee priority.</div>
+      <div class="sp-title" style="margin-top:12px">Where They Arrive</div>
+      <div class="legend-note" style="margin-top:0">
+        The colour above is what a transaction <b>wrote</b>. The door it comes through is what it
+        <b>spent</b>, which is a separate fact, so the two often disagree and that is the point.
+      </div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#8a93b0"></span> <span><b>The house</b> — spent a plain output. Outpoint and value both public.</span></div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#22e0d6"></span> <span><b>The portal</b> — spent a blinded (CT) output. You can name the outpoint, not its value. Mostly used by RingCT walkers, since blinded coin is usually spent into RingCT.</span></div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#d64bff"></span> <span><b>The veil</b> — spent a ring. The source cannot be pinned to one output.</span></div>
+      <div class="legend-row"><span class="legend-swatch" style="background:#ffcf5a"></span> <span><b>Materialises</b> — spent zerocoin. A null outpoint: there is no previous output anywhere to point at.</span></div>
+      <div class="legend-note">
+        So a cyan Veilian walking out of the house is not a mistake. It wrote hidden outputs and paid
+        for them with coin anyone can follow.
+      </div>
       <div class="sp-title">Network Detail</div>
       <div class="sp-row">Consensus <b>3 PoW algos + PoS</b></div>
       <div class="sp-row">Block time <b>~60 s</b></div>
