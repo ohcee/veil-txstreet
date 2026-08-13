@@ -354,6 +354,34 @@
 </style>
 </head>
 <body>
+<noscript>
+  <div style="position:fixed;inset:0;z-index:200;overflow-y:auto;padding:8vh 20px;
+       background:#0b0718;color:#cbc2ec;font:14px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace">
+    <div style="max-width:640px;margin:0 auto">
+      <h1 style="font-size:20px;color:#e9e2ff;margin:0 0 6px">VeilStreet needs JavaScript</h1>
+      <p style="color:#8b83ad;margin:0 0 18px">The street is a live Canvas animation, so without
+        scripting there is nothing to draw and the numbers above stay blank. Enable JavaScript to
+        watch it.</p>
+      <p style="margin:0 0 8px"><b style="color:#e9e2ff">What you are missing:</b> every transaction
+        in the mempool walking to the forming block, drawn from a Veil node in real time. What a
+        transaction <b>wrote</b> decides how it looks, what it <b>spent</b> decides which door it
+        comes through, and blocks lift off stamped MINED or STAKED.</p>
+      <p style="margin:0 0 18px;color:#8b83ad">Basecoin is public, Stealth blinds the amount, RingCT
+        hides the source in a ring, and zerocoin (about 61% of all VEIL) can be traced to no mint at
+        all.</p>
+      <p style="margin:0 0 8px"><b style="color:#3dff9a">The data does not need JavaScript.</b>
+        Every number on the page comes from plain JSON on this same host, readable with curl:</p>
+      <ul style="margin:0 0 18px;padding-left:18px;color:#8b83ad">
+        <li><a style="color:#22e0d6" href="/api/state?since=0">/api/state?since=0</a> — height, algo mix, peers, 24h and 7d history</li>
+        <li><a style="color:#22e0d6" href="/api/mempool">/api/mempool</a> — what is pending right now</li>
+        <li><a style="color:#22e0d6" href="/api/snitch">/api/snitch</a> — the largest transparent addresses</li>
+        <li><code>/api/block?id=HEIGHT</code>, <code>/api/tx?id=TXID</code>, <code>/api/address?id=ADDR</code></li>
+      </ul>
+      <p style="margin:0;color:#6b628f">Served straight off a Veil node, no third party in the middle.
+        <a style="color:#8b83ad" href="https://veil-project.com">veil-project.com</a></p>
+    </div>
+  </div>
+</noscript>
 <div id="app">
   <nav>
     <div class="brand">
