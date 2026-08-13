@@ -187,16 +187,27 @@ test("superblocks land on the interval and nowhere else", () => {
 // ---------------------------------------------------------------------------
 
 test("buckets average a window and ignore what falls outside it", () => {
+  // 24 buckets across 24h means one bucket per hour, so samples are placed at
+  // least two hours apart. An earlier version of this test put two of them 59
+  // minutes apart, which shares a bucket or not depending on the time of day:
+  // it passed on one machine and failed on another for no reason at all.
   const now = Date.now() / 1000, HOUR = 3600;
-  const series = [[now - 30 * HOUR, 999],        // older than the window
-                  [now - 2 * HOUR, 60], [now - 2 * HOUR + 60, 80],
-                  [now - HOUR, 120]];
+  const series = [[now - 30 * HOUR, 999],        // older than the day window
+                  [now - 6 * HOUR, 60],
+                  [now - 0.25 * HOUR, 120]];     // comfortably inside the last bucket
   const day = V.bucket(series, 24, 24 * HOUR);
   assert.ok(!day.includes(999), "a sample outside the window must not appear");
   assert.ok(day.length > 0);
   assert.equal(day[day.length - 1], 120, "the newest bucket holds the newest value");
   // a week-wide view of the same data does include the older sample
   assert.ok(V.bucket(series, 60, 7 * 24 * HOUR).includes(999));
+});
+
+test("samples inside one bucket are averaged, not overwritten", () => {
+  const now = Date.now() / 1000, HOUR = 3600;
+  // both land in the final hour bucket, so the bucket reports their mean
+  const out = V.bucket([[now - 0.33 * HOUR, 60], [now - 0.17 * HOUR, 80]], 24, 24 * HOUR);
+  assert.equal(out[out.length - 1], 70);
 });
 
 test("a gap carries the last value forward rather than dropping to zero", () => {
