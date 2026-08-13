@@ -263,6 +263,10 @@ All optional. Env var overrides `config.json` overrides the built-in default.
 
 ## Notes
 
+- The **Stats** panel is where the scene explains itself: a line on each coin type,
+  what every door means, whether the feed is live and how stale it is. It opens on
+  phones too, full width and scrolling, which it did not until it was noticed that
+  hiding it left a mobile viewer with no way to learn any of that.
 - On phones the scene keeps every arrival origin (house, portal, veil, mine, cult)
   and drops the bush field, the gantry and the floating debris. The ship carries
   only how the block was won and which block, since four lines of text on a 90px

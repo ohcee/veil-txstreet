@@ -331,7 +331,14 @@
   @media (max-width: 640px){ .xp-io { grid-template-columns: 1fr; } .xp-io .arrow { transform: rotate(90deg); justify-self: center; } }
 
   @media (max-width: 900px) {
-    .foot, .stats-chip, .stats-pop { display: none; }   /* phones: just the basics */
+    /* The panel is the only place the scene explains itself: what each colour means,
+       what each door means, whether the feed is live. Hiding it on phones left a
+       mobile viewer with no way to find any of that out. The chip stays; the panel
+       just has to fit a narrow screen. */
+    .foot { display: none; }
+    .stats-chip { left: 12px; bottom: 12px; }
+    .stats-pop { width: calc(100vw - 24px); left: 12px; bottom: 60px;
+                 max-height: calc(100vh - 130px); }
     #app { grid-template-columns: 1fr; grid-template-areas: "nav" "stage"; }
     aside { display: none; }
     nav { flex-wrap: wrap; gap: 6px 10px; padding: 8px 12px; }
