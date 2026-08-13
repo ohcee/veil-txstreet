@@ -1,0 +1,26 @@
+# Copy to deploy.conf (gitignored) and point it at your own boxes.
+#
+# Each target needs a host, a directory and a restart command. The rest is
+# optional: OWNER when the files must belong to a different user than the one
+# you SSH in as, CHAIN to refuse a deploy that comes back on the wrong network,
+# URL to check the public site answers afterwards.
+
+SSH_KEY="$HOME/.ssh/veilstreet_deploy"
+
+# A box where you log in as the service user and hold a scoped NOPASSWD rule for
+# exactly `systemctl restart veilstreet` (see DEPLOY.md).
+MAINNET_SSH="academy@203.0.113.10"
+MAINNET_DIR="/home/academy/veil-txstreet"
+MAINNET_RESTART="sudo -n /usr/bin/systemctl restart veilstreet"
+MAINNET_URL="https://street.veil-info.org"
+MAINNET_CHAIN="main"
+MAINNET_OWNER=""                       # blank: you already own the files
+
+# A box where you log in as root and the service runs as someone else, so the
+# copied files have to be handed back.
+TESTNET_SSH="root@203.0.113.11"
+TESTNET_DIR="/home/veil/veil-txstreet"
+TESTNET_RESTART="systemctl restart veilstreet"
+TESTNET_URL="https://testnet-street.veil-info.org"
+TESTNET_CHAIN="test"
+TESTNET_OWNER="veil:veil"

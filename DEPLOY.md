@@ -106,6 +106,30 @@ keeps running, so a live site survives the bad reload). Access logs go to
 Same steps on the testnet box: `VEIL_RPC_PORT=58813`, `VEIL_NO_USD=1`, and a name like
 `testnet-street.veil-info.org` (the commented block in the Caddyfile).
 
+## Deploying changes
+
+```bash
+cp deploy.conf.example deploy.conf     # once: point it at your boxes
+./deploy.sh                            # both targets
+./deploy.sh mainnet                    # one
+./deploy.sh --dry-run                  # show what would change, touch nothing
+```
+
+It runs `npm test` first and **deploys nothing if a test fails**, since those tests
+decide what a transaction is and a wrong answer there ships a false claim about
+somebody's privacy. Then per target it rsyncs, hands ownership over if the service
+runs as a different user, restarts, and proves the result three ways: the deployed
+bytes hash the same as local, the node answers on the chain it was supposed to serve,
+and the public URL returns 200. Any of those failing exits non-zero.
+
+It never touches git. Deploying and publishing are separate decisions, and it warns
+if the tree is dirty or commits are unpushed rather than doing anything about it.
+
+`config.json`, the harvested addresses and the block history are excluded: those
+belong to the box, not the repo. That is also why the two nodes can be tuned
+differently, and why reading the source tells you less about a running box than
+reading its `config.json` does.
+
 ## Notes
 
 * **Snitch harvest** builds over time; the first backfill runs in the background and
